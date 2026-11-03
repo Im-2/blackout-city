@@ -29,6 +29,7 @@ export class Heist {
   private dropT = 0;
   private garageOpen = 0;
   vaultOpen = false;
+  private lootSpot: import('../player/player').Interactable | null = null;
   backOpen = false;
 
   constructor(private g: Game) {}
@@ -55,8 +56,8 @@ export class Heist {
       bank.loot.visible = false;
       this.stats.loot = 250000;
     }
-    this.g.interactables.length = 0;
-    this.g.interactables.push({
+    if (this.lootSpot) { const i = this.g.interactables.indexOf(this.lootSpot); if (i >= 0) this.g.interactables.splice(i, 1); }
+    this.g.interactables.push(this.lootSpot = {
       pos: bank.lootPos,
       radius: 2.6,
       label: 'Grab the loot',

@@ -92,6 +92,8 @@ export class Vehicle {
   /** parked vehicles need a lock-pick (hold E) or a quiet hack */
   locked = false;
   boost = false;
+  /** 0..1 rain wetness (less grip) */
+  wet = 0;
   isEmergency: boolean;
   private lean = 0;
 
@@ -122,11 +124,11 @@ export class Vehicle {
     return this.parts.root;
   }
 
-  tune(kind: 'getaway') {
+  tune(kind: 'getaway', level = 0) {
     if (kind === 'getaway') {
-      this.p.maxSpeed = 38;
-      this.p.accel = 17;
-      this.p.grip = 9.5;
+      this.p.maxSpeed = 38 + level * 2.5;
+      this.p.accel = 17 + level * 2;
+      this.p.grip = 9.5 + level * 0.4;
       this.p.steerRate = 2.5;
       this.isGetaway = true;
     }
@@ -176,7 +178,7 @@ export class Vehicle {
     const tgtGrip = hb && !this.two ? p.driftGrip : p.grip * (1 - 0.3 * clamp(Math.abs(vf) / p.maxSpeed, 0, 1) * Math.abs(steer));
     this.grip = tgtGrip < this.grip ? damp(this.grip, tgtGrip, 14, dt) : damp(this.grip, tgtGrip, 2.2, dt);
     if (this.wrecked) this.grip = 6;
-    vs *= Math.exp(-this.grip * dt);
+    vs *= Math.exp(-this.grip * (1 - this.wet * 0.18) * dt);
 
     // yaw
     const sp = Math.abs(vf);

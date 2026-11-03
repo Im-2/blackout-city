@@ -65,7 +65,7 @@ export function turnPoints(g: Game, a: number, b: number, c: number, offset = LA
 
 export function pickNext(g: Game, a: number, b: number, rng: () => number): number {
   const n = g.city.graph.nodes[b];
-  const opts = n.edges.map((e) => g.city.graph.other(g.city.graph.edges[e], b)).filter((x) => x !== a);
+  const opts = n.edges.filter((e) => !g.city.graph.edges[e].closed).map((e) => g.city.graph.other(g.city.graph.edges[e], b)).filter((x) => x !== a);
   if (!opts.length) return a;
   return opts[Math.floor(rng() * opts.length)];
 }
@@ -129,7 +129,7 @@ export class Traffic {
   constructor(private g: Game) {}
 
   get target() {
-    return this.g.quality.p.traffic;
+    return Math.round(this.g.quality.p.traffic * (this.g.world.rushHour ? 1.3 : 1));
   }
 
   reset() {
@@ -151,7 +151,8 @@ export class Traffic {
     // pick location first so the district decides the vehicle
     const loc = this.findSpot(anywhere);
     if (!loc) return null;
-    const kind = forced ?? pickKind(r, districtAt(loc.x, loc.z));
+    let kind = forced ?? pickKind(r, districtAt(loc.x, loc.z));
+    if (!forced && this.g.world.rushHour && r.chance(0.3)) kind = 'sedan';
     const v = new Vehicle(kind, colorFor(r, kind), g.col);
     v.driver = 'traffic';
     const two = v.two;
@@ -167,6 +168,7 @@ export class Traffic {
     const P = g.player.worldPos;
     for (let tries = 0; tries < 30; tries++) {
       const e = this.rng.pick(g.city.graph.edges);
+      if (e.closed) continue;
       const flip = this.rng.chance(0.5);
       const a = flip ? e.b : e.a, b = flip ? e.a : e.b;
       const pts = edgePoints(g, a, b);

@@ -83,7 +83,7 @@ export class CameraRig {
       shoulder = 0.55;
       tgt.set(p.pos.x, p.pos.y + 1.55, p.pos.z);
       this.lead.set(0, 0, 0);
-      if (g.bank.isInside(p.pos.x, p.pos.z)) wantDist = Math.min(wantDist, 3.4);
+      if (g.ceilingAt(p.pos.x, p.pos.z, p.pos.y) < 50) wantDist = Math.min(wantDist, 3.4);
     }
     this.wasCar = !!v;
     this.dist = damp(this.dist, wantDist, 5, dt);
@@ -102,7 +102,7 @@ export class CameraRig {
     const hit = g.col.raycast(base.x, base.y, base.z, dx, dy, dz, dist + 0.3);
     if (hit !== Infinity) dist = Math.max(0.6, hit - 0.3);
     this.pos.set(base.x + dx * dist, base.y + dy * dist, base.z + dz * dist);
-    if (!v && g.bank.isInside(g.player.pos.x, g.player.pos.z)) this.pos.y = Math.min(this.pos.y, 5.6);
+    if (!v) this.pos.y = Math.min(this.pos.y, g.ceilingAt(g.player.pos.x, g.player.pos.z, g.player.pos.y) - 0.4);
     this.pos.y = Math.max(this.pos.y, 0.4);
 
     // shake

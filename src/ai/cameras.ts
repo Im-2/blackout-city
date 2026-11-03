@@ -24,6 +24,9 @@ export interface SecCam {
   blindT: number;
   bank: boolean;
   inside: boolean;
+  site: string | null; // null = outdoors, 'bank', or a building id
+  onSpot?: (c: SecCam) => void;
+  meshes: THREE.Object3D[];
   block: number;
   seeing: boolean;
   t: number;
@@ -42,7 +45,7 @@ export class SecurityCameras {
   build() {
     const g = this.g;
     // bank cameras
-    for (const c of g.bank.cams) this.add(c.pos, c.yaw, c.pitch, true, c.inside, c.mount === 'pole', 16, 0.5);
+    for (const c of g.bank.cams) this.add(c.pos, c.yaw, c.pitch, true, c.inside, c.mount === 'pole', 16, 0.5, c.inside ? 'bank' : null);
     // street cameras on poles at some corners (like the concept art)
     const spots: [number, number, number][] = [
       [-10, -10, -2.4], [46, 10, -0.8], [-46, 66, 2.4], [102, -46, -0.8], [10, 122, 2.4], [-122, -10, -2.4], [66, 46, -0.8], [-66, -66, 0.8], [122, 102, 2.4], [-10, -122, -2.4], [-66, 10, 0.8],
@@ -55,8 +58,21 @@ export class SecurityCameras {
     }
   }
 
-  private add(pos: THREE.Vector3, yaw: number, pitch: number, bank: boolean, inside: boolean, pole: boolean, range: number, fov: number) {
+  addCam(pos: THREE.Vector3, yaw: number, pitch: number, site: string, onSpot: (c: SecCam) => void) {
+    const c = this.add(pos, yaw, pitch, false, true, false, 14, 0.55, site);
+    c.onSpot = onSpot;
+    return c;
+  }
+
+  removeCam(c: SecCam) {
+    for (const m of c.meshes) this.group.remove(m);
+    const i = this.cams.indexOf(c);
+    if (i >= 0) this.cams.splice(i, 1);
+  }
+
+  private add(pos: THREE.Vector3, yaw: number, pitch: number, bank: boolean, inside: boolean, pole: boolean, range: number, fov: number, site: string | null = null): SecCam {
     const M = worldMaterials();
+    const meshes: THREE.Object3D[] = [];
     if (pole) {
       const pg = new GeoBuilder();
       pg.cbox(0, pos.y / 2, 0, 0.22, pos.y, 0.22, { color: PAL.metal, shadeSides: true });
@@ -65,6 +81,7 @@ export class SecurityCameras {
       pm.position.set(pos.x, 0, pos.z);
       pm.castShadow = true;
       this.group.add(pm);
+      meshes.push(pm);
       this.g.col.addCentered(pos.x, pos.z, 0.3, 0.3, pos.y, 0, false, 'pole');
     }
     const head = new THREE.Group();
@@ -81,6 +98,7 @@ export class SecurityCameras {
     head.add(led);
     head.position.copy(pos);
     this.group.add(head);
+    meshes.push(head);
     if (!coneGeo) {
       // a flat fan, 1 unit long, unit half-angle scaled later
       const shape = new THREE.Shape();
@@ -97,8 +115,11 @@ export class SecurityCameras {
     cone.scale.set(range * (fov / 0.5), 1, range);
     cone.renderOrder = 2;
     this.group.add(cone);
+    meshes.push(cone);
     const b = blockAt(pos.x, pos.z);
-    this.cams.push({ id: this.cams.length, head, led, cone, pos: pos.clone(), baseYaw: yaw, yaw, pitch, sweep: bank ? 0.35 : 0.6, range, fov, blindT: 0, bank, inside, block: b ? b[1] * BLOCKS + b[0] : -1, seeing: false, t: Math.random() * 10 });
+    const cam: SecCam = { id: this.cams.length, head, led, cone, pos: pos.clone(), baseYaw: yaw, yaw, pitch, sweep: bank ? 0.35 : 0.6, range, fov, blindT: 0, bank, inside, site, meshes, block: b ? b[1] * BLOCKS + b[0] : -1, seeing: false, t: Math.random() * 10 };
+    this.cams.push(cam);
+    return cam;
   }
 
   reset() {
@@ -128,10 +149,10 @@ export class SecurityCameras {
       (c.led.material as THREE.MeshBasicMaterial).color.set(off ? '#1a1a1a' : c.seeing ? '#ffffff' : '#ff2a1a');
       c.led.visible = ledOn || off;
       // ground cone
-      const groundY = c.inside ? g.bank.floorY + 0.03 : 0.2;
+      const groundY = c.site === 'bank' ? g.bank.floorY + 0.03 : c.site ? c.pos.y - 3.6 : 0.2;
       c.cone.position.set(c.pos.x, groundY, c.pos.z);
       c.cone.rotation.y = c.yaw;
-      const showCone = !off && (c.bank || g.hack.active);
+      const showCone = !off && (c.bank || !!c.site || g.hack.active);
       c.cone.visible = showCone;
       const cm = c.cone.material as THREE.MeshBasicMaterial;
       cm.color.set(c.seeing ? '#ff3a2a' : g.hack.active ? '#46e6ff' : '#ff6a3a');
@@ -144,11 +165,13 @@ export class SecurityCameras {
       if (d > c.range || d < 0.5) continue;
       const ang = Math.abs(wrapAngle(Math.atan2(dx, dz) - c.yaw));
       if (ang > c.fov) continue;
-      if (c.inside !== g.bank.isInside(P.x, P.z)) continue;
+      if (c.site !== g.siteAt(P.x, P.z, g.player.pos.y)) continue;
+      if (g.player.hidden) continue;
       if (!g.col.lineOfSight(c.pos.x + Math.sin(c.yaw) * 0.6, c.pos.y, c.pos.z + Math.cos(c.yaw) * 0.6, P.x, py, P.z)) continue;
       if (g.hack.isBlackedOut(P.x, P.z) && d > 6) continue;
       c.seeing = true;
-      g.onCameraSpotted(c, dt);
+      if (c.onSpot) c.onSpot(c);
+      else g.onCameraSpotted(c, dt);
     }
   }
 }

@@ -94,6 +94,8 @@ export interface REdge {
   axis: 'x' | 'z';
   name: string;
   len: number;
+  /** closed by a street event / barrier (traffic avoids it) */
+  closed?: boolean;
 }
 
 export class RoadGraph {

@@ -6,6 +6,7 @@ import { createCharacter } from '../characters/loader';
 import { GUARD_SKIN } from '../characters/skins';
 import type { CharacterView, AnimState } from '../characters/rig';
 import type { Game } from '../core/game';
+import { surfaceHeight } from '../world/layout';
 
 const FOV = 0.68; // half-angle
 const RANGE = 11;
@@ -25,6 +26,8 @@ interface Guard {
   state: AnimState;
   stunT: number;
   reactT: number;
+  site: string; // 'bank' or a building id
+  onSee?: () => void;
 }
 
 export class Guards {
@@ -43,16 +46,33 @@ export class Guards {
   }
 
   reset() {
-    for (const gd of this.guards) { this.g.scene.remove(gd.view.root, gd.cone); }
-    this.guards = [];
-    for (const route of this.g.bank.guardRoutes) {
-      const view = createCharacter('cop', GUARD_SKIN);
-      this.g.scene.add(view.root);
-      const cone = new THREE.Mesh(this.coneGeo, new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
-      cone.renderOrder = 2;
-      this.g.scene.add(cone);
-      this.guards.push({ view, pos: route[0].clone(), heading: 0, route, wp: 1, waitT: 0, cone, sees: false, alert: false, goal: null, lookT: 0, state: 'idle', stunT: 0, reactT: 0 });
-    }
+    for (const gd of this.guards.filter((x) => x.site === 'bank')) this.removeGuard(gd);
+    for (const route of this.g.bank.guardRoutes) this.addGuard(route, 'bank');
+  }
+
+  addGuard(route: THREE.Vector3[], site: string, onSee?: () => void) {
+    const view = createCharacter('cop', GUARD_SKIN);
+    this.g.scene.add(view.root);
+    const cone = new THREE.Mesh(this.coneGeo, new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
+    cone.renderOrder = 2;
+    this.g.scene.add(cone);
+    const gd: Guard = { view, pos: route[0].clone(), heading: 0, route, wp: 1 % route.length, waitT: 0, cone, sees: false, alert: false, goal: null, lookT: 0, state: 'idle', stunT: 0, reactT: 0, site, onSee };
+    this.guards.push(gd);
+    return gd;
+  }
+
+  private removeGuard(gd: Guard) {
+    this.g.scene.remove(gd.view.root, gd.cone);
+    const i = this.guards.indexOf(gd);
+    if (i >= 0) this.guards.splice(i, 1);
+  }
+
+  removeSite(site: string) {
+    for (const gd of this.guards.filter((x) => x.site === site)) this.removeGuard(gd);
+  }
+
+  alertSite(site: string, pos: THREE.Vector3) {
+    for (const gd of this.guards) if (gd.site === site) { if (!gd.alert) gd.reactT = 0.9; gd.alert = true; gd.goal = pos.clone(); }
   }
 
   /** a guard is close enough to grab the player */
@@ -63,7 +83,7 @@ export class Guards {
 
   alertAll(pos: THREE.Vector3) {
     // a beat of surprise before they react — gives the player a chance to bolt
-    for (const gd of this.guards) { if (!gd.alert) gd.reactT = 0.9; gd.alert = true; gd.goal = pos.clone(); }
+    for (const gd of this.guards) if (gd.site === 'bank') { if (!gd.alert) gd.reactT = 0.9; gd.alert = true; gd.goal = pos.clone(); }
   }
 
   /** distraction: guards investigate a point (if not already chasing) */
@@ -74,7 +94,8 @@ export class Guards {
   update(dt: number) {
     const g = this.g;
     const P = g.player.worldPos;
-    const pIn = g.bank.isInside(P.x, P.z) || g.bank.isRestricted(P.x, P.z);
+    const pSite = g.siteAt(P.x, P.z, g.player.pos.y);
+    const bankIn = g.bank.isInside(P.x, P.z) || g.bank.isRestricted(P.x, P.z);
     for (const gd of this.guards) {
       // perception
       gd.sees = false;
@@ -83,13 +104,17 @@ export class Guards {
         const d = Math.hypot(dx, dz);
         const ang = Math.abs(wrapAngle(Math.atan2(dx, dz) - gd.heading));
         const range = g.hack.isBlackedOut(gd.pos.x, gd.pos.z) ? RANGE * 0.45 : RANGE;
-        if (d < range && (ang < FOV || d < 1.4 || (gd.alert && d < range * 1.3)) && pIn) {
+        const pIn = gd.site === 'bank' ? bankIn : pSite === gd.site && Math.abs(g.player.pos.y - gd.pos.y) < 3;
+        if (d < range && (ang < FOV || d < 1.4 || (gd.alert && d < range * 1.3)) && pIn && !g.player.hidden) {
           if (g.col.lineOfSight(gd.pos.x, gd.pos.y + 1.6, gd.pos.z, P.x, g.player.pos.y + 1.2, P.z)) gd.sees = true;
         }
       }
       if (gd.sees) {
-        g.onGuardSpotted(dt);
-        if (g.heist.alarm) { gd.alert = true; gd.goal = P.clone(); }
+        if (gd.onSee) { gd.onSee(); gd.alert = true; gd.goal = P.clone(); }
+        else {
+          g.onGuardSpotted(dt);
+          if (g.heist.alarm) { gd.alert = true; gd.goal = P.clone(); }
+        }
       }
 
       // movement
@@ -122,7 +147,7 @@ export class Guards {
         gd.heading = dampAngle(gd.heading, Math.atan2(dx, dz), 7, dt);
       } else speed = 0;
       g.col.resolveCircle(gd.pos, 0.34, gd.pos.y, 0.45, gd.pos.y + 1.7);
-      gd.pos.y = Math.max(g.col.groundUnder(gd.pos.x, gd.pos.z, 0.3, gd.pos.y + 0.46), 0.15);
+      gd.pos.y = Math.max(g.col.groundUnder(gd.pos.x, gd.pos.z, 0.3, gd.pos.y + 0.46), surfaceHeight(gd.pos.x, gd.pos.z, gd.pos.y, 0.5), 0.15);
       gd.state = gd.stunT > 0 ? 'handsup' : speed > 4 ? 'run' : speed > 0.3 ? 'walk' : 'idle';
       gd.view.update(dt, gd.state, speed);
       gd.view.root.position.copy(gd.pos);

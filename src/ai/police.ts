@@ -47,6 +47,8 @@ export interface Officer {
   state: AnimState;
   goal: THREE.Vector3 | null;
   returning: boolean;
+  /** posted at an escape route the player overuses */
+  post?: THREE.Vector3;
 }
 
 const UNIT_CAP = [2, 2, 3, 4, 5, 6];
@@ -71,6 +73,8 @@ export class Police {
   private hintT = 0;
   private stakeoutDone = false;
   heli: Heli | null = null;
+  airWatch = false;
+  searchHides = false;
   /** the car the police are looking for */
   knownVehicle: { id: number; color: string } | null = null;
 
@@ -94,6 +98,8 @@ export class Police {
     this.progress = 0;
     this.peak = 0;
     this.minHeat = 0;
+    this.airWatch = false;
+    this.searchHides = false;
     this.knownVehicle = null;
     this.lastSeenT = 999;
     this.bust = 0;
@@ -188,9 +194,10 @@ export class Police {
     }
 
     // helicopter at heat 5
-    if (this.heat >= 5 && !this.heli) this.heli = new Heli(g);
-    if (this.heat < 5 && this.heli && this.heli.leave(dt)) { this.heli.dispose(); this.heli = null; }
-    if (this.heli && this.heat >= 5 && this.heli.update(dt, this)) this.markSeen();
+    const heliHeat = this.airWatch ? 3 : 5;
+    if (this.heat >= heliHeat && !this.heli) this.heli = new Heli(g);
+    if (this.heat < heliHeat && this.heli && this.heli.leave(dt)) { this.heli.dispose(); this.heli = null; }
+    if (this.heli && this.heat >= heliHeat && this.heli.update(dt, this)) this.markSeen();
 
     // roadblocks at heat >= 4
     if (this.heat >= 4) {
@@ -279,7 +286,7 @@ export class Police {
     if (g.player.hidden) return false;
     if (d > range) return false;
     if (g.hack.isBlackedOut(P.x, P.z) && d > 11) return false;
-    if (g.bank.isInside(P.x, P.z) !== g.bank.isInside(x, z)) return false;
+    if (g.siteAt(P.x, P.z, g.player.pos.y) !== g.siteAt(x, z, y - 1.5) && !(g.siteAt(P.x, P.z, g.player.pos.y) === 'garage')) return false;
     const py = g.player.vehicle ? P.y + 1.0 : g.player.pos.y + 1.3;
     return g.col.lineOfSight(x, y, z, P.x, py, P.z);
   }
@@ -519,7 +526,7 @@ export class Police {
     const towardB = (B.x - A.x) * fx + (B.z - A.z) * fz > 0;
     const from = towardB ? e.a : e.b, start = towardB ? e.b : e.a;
     const goal = G.nearestNode(tx, tz).id;
-    const path = [from, ...G.path(start, goal)];
+    const path = [from, ...G.path(start, goal, (e) => (e.closed ? 40 : 1))];
     const pts: Pt[] = [];
     const S = G.nodes[start];
     pts.push(lanePoint(G.nodes[from].x, G.nodes[from].z, S.x, S.z, 0.85, LANE * 0.5));
@@ -624,12 +631,14 @@ export class Police {
     } else if (this.heat > 0) {
       tx = this.lastKnown.x; tz = this.lastKnown.z;
       speed = Math.hypot(tx - o.pos.x, tz - o.pos.z) > 2 ? 3.5 : 0;
-      if (d > 90 && !g.isVisible(o.pos.x, 1, o.pos.z)) return true;
+      if (d > 90 && !g.isVisible(o.pos.x, 1, o.pos.z) && !o.post) return true;
     } else {
-      if (o.car && this.units.includes(o.car)) { tx = o.car.pos.x; tz = o.car.pos.z; speed = 3.2; if (Math.hypot(tx - o.pos.x, tz - o.pos.z) < 2.6) return true; }
+      if (o.post) { tx = o.post.x; tz = o.post.z; speed = Math.hypot(tx - o.pos.x, tz - o.pos.z) > 1 ? 2.5 : 0; }
+      else if (o.car && this.units.includes(o.car)) { tx = o.car.pos.x; tz = o.car.pos.z; speed = 3.2; if (Math.hypot(tx - o.pos.x, tz - o.pos.z) < 2.6) return true; }
       else if (!g.isVisible(o.pos.x, 1, o.pos.z)) return true;
     }
     if (o.goal) { tx = o.goal.x; tz = o.goal.z; speed = 4; if (Math.hypot(tx - o.pos.x, tz - o.pos.z) < 2) o.goal = null; }
+    if (g.player.hidden && this.searchHides && d < 2.2) { g.player.hidden = false; g.player.view.root.visible = true; g.hud.toast('FOUND YOU!', 'heat'); }
     const dx = tx - o.pos.x, dz = tz - o.pos.z;
     const dl = Math.hypot(dx, dz);
     const vx = dl > 0.5 ? (dx / dl) * speed : 0, vz = dl > 0.5 ? (dz / dl) * speed : 0;
@@ -730,7 +739,8 @@ class Heli {
     const g = this.g;
     this.t += dt;
     const P = g.player.worldPos;
-    const blacked = g.hack.isBlackedOut(P.x, P.z) || g.bank.isInside(P.x, P.z);
+    const site = g.siteAt(P.x, P.z, P.y);
+    const blacked = g.hack.isBlackedOut(P.x, P.z) || (site !== null && !(site === 'garage' && P.y > 7));
     const target = police.lastSeenT < 2 && !blacked ? P : police.lastKnown;
     const hx = target.x + Math.sin(this.t * 0.4) * 18, hz = target.z + Math.cos(this.t * 0.4) * 18;
     this.pos.x = damp(this.pos.x, hx, 0.6, dt);

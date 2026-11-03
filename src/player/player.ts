@@ -2,7 +2,7 @@
 // enter/exit vehicles. Slightly weighty but responsive.
 import * as THREE from 'three';
 import { clamp, damp, dampAngle } from '../core/math';
-import { groundHeight } from '../world/layout';
+import { groundHeight, surfaceHeight, CURB_H } from '../world/layout';
 import { createCharacter } from '../characters/loader';
 import { PLAYER_SKIN } from '../characters/skins';
 import type { CharacterView, AnimState } from '../characters/rig';
@@ -56,6 +56,9 @@ export class Player {
   spawn(x: number, z: number, heading: number) {
     this.exitVehicle(true);
     this.pos.set(x, Math.max(groundHeight(x, z), this.g.col.groundUnder(x, z, R, 1.5)), z);
+    this.travel = null;
+    this.hidden = false;
+    this.view.root.visible = true;
     this.heading = heading;
     this.vx = this.vz = this.vy = 0;
     this.busted = false;
@@ -73,9 +76,60 @@ export class Player {
     return this.vehicle ? this.vehicle.pos : this.pos;
   }
 
+  private travel: { kind: 'climb' | 'zip'; t: number; dur: number; from: THREE.Vector3; to: THREE.Vector3; heading: number } | null = null;
+
+  /** fire escapes: up or down a ladder */
+  climb(L: { x: number; z: number; top: number; heading: number; topX: number; topZ: number }, up: boolean) {
+    const a = new THREE.Vector3(L.x, CURB_H, L.z), b = new THREE.Vector3(L.topX, L.top, L.topZ);
+    this.travel = { kind: 'climb', t: 0, dur: Math.max(1.2, L.top / 7), from: up ? a : b, to: up ? b : a, heading: L.heading + Math.PI };
+    if (up) this.g.save.escape('rooftop');
+  }
+
+  zipline(z: { a: THREE.Vector3; b: THREE.Vector3 }) {
+    const d = z.a.distanceTo(z.b);
+    this.travel = { kind: 'zip', t: 0, dur: d / 16, from: z.a.clone(), to: z.b.clone(), heading: Math.atan2(z.b.x - z.a.x, z.b.z - z.a.z) };
+    this.g.audio.whoosh();
+    this.g.save.escape('rooftop');
+  }
+
+  hide(pos: THREE.Vector3) {
+    this.hidden = true;
+    this.pos.copy(pos);
+    this.view.root.visible = false;
+    this.vx = this.vz = 0;
+    this.g.save.escape('hide');
+    this.g.hud.toast('HIDDEN — PRESS E TO COME OUT', 'cool');
+  }
+
   update(dt: number) {
     const g = this.g;
     const inp = g.input;
+    if (this.hidden) {
+      if (inp.pressed('KeyE') || inp.pressed('Space')) { this.hidden = false; this.view.root.visible = true; }
+      return;
+    }
+    if (this.travel) {
+      const t = this.travel;
+      t.t += dt;
+      const f = Math.min(1, t.t / t.dur);
+      if (t.kind === 'climb') {
+        // up the ladder first, then step onto the roof (or reverse)
+        const up = t.to.y > t.from.y;
+        const k = up ? Math.min(1, f / 0.85) : Math.max(0, (f - 0.15) / 0.85);
+        this.pos.set(up && f > 0.85 ? THREE.MathUtils.lerp(t.from.x, t.to.x, (f - 0.85) / 0.15) : !up && f < 0.15 ? THREE.MathUtils.lerp(t.from.x, t.to.x, f / 0.15) : up ? t.from.x : t.to.x,
+          THREE.MathUtils.lerp(t.from.y, t.to.y, k),
+          up && f > 0.85 ? THREE.MathUtils.lerp(t.from.z, t.to.z, (f - 0.85) / 0.15) : !up && f < 0.15 ? THREE.MathUtils.lerp(t.from.z, t.to.z, f / 0.15) : up ? t.from.z : t.to.z);
+        this.view.update(dt, 'climb', 0);
+      } else {
+        this.pos.lerpVectors(t.from, t.to, f * f * (1.6 - 0.6 * f));
+        this.view.update(dt, 'handsup', 0);
+        g.camRig.fovKick = Math.max(g.camRig.fovKick, 6);
+      }
+      this.heading = t.heading;
+      if (f >= 1) { this.travel = null; this.vy = 0; this.pos.copy(t.to); }
+      this.syncView();
+      return;
+    }
     if (this.vehicle) {
       this.focus = null;
       this.focusLabel = '';
@@ -184,7 +238,7 @@ export class Player {
       }
     }
     // ground
-    const base = groundHeight(this.pos.x, this.pos.z);
+    const base = surfaceHeight(this.pos.x, this.pos.z, feet, 0.46);
     const top = g.col.groundUnder(this.pos.x, this.pos.z, R, feet + 0.46);
     const ground = Math.max(base, top);
     if (this.pos.y <= ground + 0.02 || (this.grounded && this.vy <= 0 && this.pos.y - ground < 0.35)) {
@@ -349,7 +403,10 @@ export class Player {
     this.pos.copy(v.pos);
     this.heading = v.heading;
     this.view.update(dt, v.two ? 'ride' : 'drive', Math.abs(v.speed));
-    if (inp.pressed('KeyE') && !g.hack.active) this.exitVehicle();
+    if (inp.pressed('KeyE') && !g.hack.active) {
+      if (g.carAction) g.carAction.action();
+      else this.exitVehicle();
+    }
     void clamp;
   }
 

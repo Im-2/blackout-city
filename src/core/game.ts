@@ -33,6 +33,11 @@ import { StreetLife } from '../world/streetlife';
 import { Ambient } from '../render/ambient';
 import { News } from '../ui/news';
 import { Disguise } from '../player/disguise';
+import { Buildings } from '../world/buildings';
+import { Loot, Shop } from './economy';
+import { Jobs } from '../heist/jobs';
+import { WorldTime } from '../render/world';
+import { Escapes } from '../ai/escapes';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results';
 
@@ -70,6 +75,15 @@ export class Game {
   ambient!: Ambient;
   news!: News;
   disguise!: Disguise;
+  buildings!: Buildings;
+  loot!: Loot;
+  shop!: Shop;
+  jobs!: Jobs;
+  world!: WorldTime;
+  escapes!: Escapes;
+  /** context action for E while driving (e.g. respray booth) */
+  carAction: { label: string; action: () => void } | null = null;
+  private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean } | null = null;
   debugOverlay = false;
   frameMs = 16;
   vehicles: Vehicle[] = [];
@@ -121,7 +135,9 @@ export class Game {
     this.env = new Environment(this.scene);
     this.resize();
     await step(0.15, 'laying roads');
-    this.city = new City(this.col).build();
+    this.city = new City(this.col);
+    Buildings.reserve(this.city);
+    this.city.build();
     this.scene.add(this.city.group);
     await step(0.4, 'building the bank');
     this.bank = new Bank(this.col).build();
@@ -147,7 +163,14 @@ export class Game {
     this.police = new Police(this);
     this.peds = new Pedestrians(this);
     this.guards = new Guards(this);
+    this.world = new WorldTime(this);
+    this.loot = new Loot(this);
+    this.shop = new Shop(this);
+    this.jobs = new Jobs(this);
     this.hack = new HackSystem(this);
+    await step(0.82, 'opening shops');
+    this.buildings = new Buildings(this).build();
+    this.escapes = new Escapes(this).build();
     this.hack.build();
     this.heist = new Heist(this);
     this.news = new News(this);
@@ -257,6 +280,31 @@ export class Game {
     this.peds.reset();
     this.guards.reset();
     this.ambient.reset();
+    this.loot.reset();
+    this.jobs.reset();
+    this.world.reset();
+    this.buildings.reset();
+    this.escapes.reset();
+    this.carAction = null;
+    this.fade = null;
+    // cruisers parked behind the police station (locked, stealable)
+    for (const s of this.buildings.policeLot) {
+      const v = new Vehicle('police', '#1c1c1e', this.col);
+      v.place(s.x, s.z, s.h);
+      v.locked = true;
+      v.handbrake = true;
+      this.addVehicle(v);
+    }
+    // cars on the parking garage decks
+    for (const [x, z, y] of [[14.5, 70, 0], [23.5, 70, 0], [32.5, 70, 3.8], [20.5, 70, 3.8], [26, 98, 7.6]]) {
+      const kind = pickKind(this.rng, 'downtown');
+      const v = new Vehicle(kind === 'bus' ? 'sedan' : kind, colorFor(this.rng, kind), this.col);
+      v.place(x, z, 0);
+      v.pos.y = y + (y > 0 ? 0 : 0.15);
+      v.locked = !v.two;
+      v.handbrake = true;
+      this.addVehicle(v);
+    }
     this.news.reset();
     this.disguise.reset();
 
@@ -304,8 +352,31 @@ export class Game {
   sites(): { name: string; x: number; z: number; heading: number }[] {
     return [
       { name: 'Bank', x: this.bank.playerStart.x, z: this.bank.playerStart.z, heading: Math.PI },
+      ...this.buildings.sites.map((s) => ({ name: s.name, ...s.approach })),
       { name: 'Old Garage drop', x: this.city.dropZone.doorX - 18, z: this.city.dropZone.doorZ, heading: Math.PI / 2 },
+      ...this.escapes.stations.map((s) => ({ name: `${s.name} station`, x: s.entrance.x, z: s.entrance.z + 3, heading: Math.PI })),
     ];
+  }
+
+  /** which enclosed site a point is in: 'bank', a building id, or null (outdoors) */
+  siteAt(x: number, z: number, y = 0): string | null {
+    if (this.bank.isInside(x, z)) return 'bank';
+    if (y < -2) return 'subway';
+    return this.buildings.siteAt(x, z, y)?.id ?? null;
+  }
+
+  /** interior ceiling height for camera clamping (99 = open sky) */
+  ceilingAt(x: number, z: number, y: number): number {
+    if (this.bank.isInside(x, z)) return 6;
+    if (y < -2) return this.escapes.ceiling;
+    const s = this.buildings.siteAt(x, z, y);
+    if (!s || s.ceiling > 50) return 99;
+    return y + s.ceiling;
+  }
+
+  /** cut-to-black teleport (elevators, subway, sewers) */
+  fadeTeleport(x: number, y: number, z: number, heading: number, label: string) {
+    this.fade = { t: 0, to: new THREE.Vector3(x, y, z), heading, label, done: false };
   }
 
   isVisible(x: number, y: number, z: number) {
@@ -350,6 +421,8 @@ export class Game {
     this.player.busted = true;
     this.player.exitVehicle(true);
     this.player.busted = true;
+    if (this.loot.carried.length) this.hud.toast(`LOOT CONFISCATED ($${this.loot.carriedValue.toLocaleString()})`, 'heat');
+    this.loot.confiscate();
     this.audio.busted();
     this.hud.toast('BUSTED', 'heat');
     this.bustT = 0;
@@ -357,6 +430,7 @@ export class Game {
 
   onOutcome(o: Outcome) {
     if (o === 'won') {
+      this.loot.addCash(this.heist.stats.loot);
       this.audio.win();
       this.hud.toast('CLEAN GETAWAY', 'win');
       this.police.setHeat(0);
@@ -444,6 +518,11 @@ export class Game {
     this.peds.update(dt);
     this.ambient.update(dt);
     this.street.update(dt);
+    this.buildings.update(dt);
+    this.escapes.update(dt);
+    this.jobs.update(dt);
+    this.world.update(dt);
+    this.updateFade(realDt);
     this.news.update(realDt);
     this.hack.update(realDt, dt);
     this.heist.update(dt);
@@ -483,6 +562,23 @@ export class Game {
     this.post.damage = damp(this.post.damage, pv ? Math.max(0, (40 - pv.hp) / 40) * 0.6 : 0, 3, realDt) + this.police.bust * 0.5 * (1 - this.post.damage);
     this.hud.update(realDt, this);
     void inp;
+  }
+
+  private updateFade(dt: number) {
+    const f = this.fade;
+    if (!f) return;
+    f.t += dt;
+    this.post.flash = Math.max(this.post.flash, Math.min(1, f.t < 0.35 ? f.t / 0.35 : 1 - (f.t - 0.35) / 0.4) * 1.8);
+    (this.post.mat.uniforms.uFlashColor.value as THREE.Color).set('#000000');
+    if (!f.done && f.t > 0.35) {
+      f.done = true;
+      const v = this.player.vehicle;
+      if (v) { v.place(f.to.x, f.to.z, f.heading); v.pos.y = f.to.y; }
+      else { this.player.spawn(f.to.x, f.to.z, f.heading); this.player.pos.y = f.to.y; }
+      this.camRig.snapBehind(f.heading);
+      this.hud.toast(f.label, 'dim');
+    }
+    if (f.t > 0.75) this.fade = null;
   }
 
   private handleImpacts() {

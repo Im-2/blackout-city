@@ -40,6 +40,7 @@ export class City {
   benches: { x: number; z: number; yaw: number }[] = [];
   /** blocks reserved for hand-built buildings (shops, station, garage…) */
   reserved = new Map<number, string>();
+  footprints: { x0: number; z0: number; x1: number; z1: number; top: number }[] = [];
   cameraSpots: CameraSpot[] = [];
   pedLoops: { x0: number; z0: number; x1: number; z1: number }[] = [];
   dropZone = { x: 0, z: 0, w: 10, d: 12, doorX: 0, doorZ: 0 };
@@ -168,8 +169,8 @@ export class City {
     const isBank = bi === BANK_BLOCK[0] && bj === BANK_BLOCK[1];
     const isDrop = bi === DROP_BLOCK[0] && bj === DROP_BLOCK[1];
 
-    if (isBank) {
-      // Bank is hand-built (bank.ts). Pave the back lot.
+    if (isBank || this.reserved.has(id)) {
+      // hand-built (bank.ts / buildings.ts)
     } else if (isDrop) {
       this.buildGarage(lot, bucket);
     } else {
@@ -310,7 +311,8 @@ export class City {
       pp.cbox(tx, ty + 6.5, tz, 2.0, 0.6, 2.0, { color: '#4a3a2e' });
       pp.cbox(tx, ty + 7.0, tz, 1.0, 0.5, 1.0, { color: '#4a3a2e' });
     }
-    this.col.add(x0, 0, z0, x1, top + 1, z1, true, 'building');
+    this.col.add(x0, 0, z0, x1, top + 0.5, z1, true, 'building');
+    this.footprints.push({ x0, z0, x1, z1, top: top + 0.5 });
     return top;
   }
 
@@ -561,6 +563,7 @@ export class City {
     for (let bj = 0; bj < BLOCKS; bj++)
       for (let bi = 0; bi < BLOCKS; bi++) {
         if (bi === BANK_BLOCK[0] && bj === BANK_BLOCK[1]) continue;
+        if (this.reserved.has(bj * BLOCKS + bi)) continue;
         const b = blockBounds(bi, bj);
         const L = b.x1 - b.x0;
         for (const t of [0.5]) {

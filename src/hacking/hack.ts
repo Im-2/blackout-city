@@ -7,7 +7,10 @@ import { BLOCKS, PITCH } from '../world/layout';
 import type { Game } from '../core/game';
 import type { Vehicle } from '../vehicles/vehicle';
 
-export type HackKind = 'signal' | 'camera' | 'door' | 'lamp' | 'power' | 'alarm' | 'cell';
+export type HackKind =
+  | 'signal' | 'camera' | 'door' | 'lamp' | 'power' | 'alarm' | 'cell'
+  | 'register' | 'laser' | 'safe' | 'alarmpanel' | 'gate' | 'server' | 'records' | 'vending'
+  | 'atm' | 'truck' | 'barrier' | 'billboard' | 'drone' | 'bollard' | 'subway';
 
 export interface Hackable {
   kind: HackKind;
@@ -28,6 +31,21 @@ export const HACK_INFO: Record<HackKind, { cost: number; cd: number; tag: string
   power: { cost: 40, cd: 8, tag: 'PWR', name: 'Power box' },
   alarm: { cost: 12, cd: 2, tag: 'CAR', name: 'Parked vehicle' },
   cell: { cost: 20, cd: 4, tag: 'CELL', name: 'Cell tower' },
+  register: { cost: 15, cd: 2, tag: 'POS', name: 'Register' },
+  laser: { cost: 25, cd: 2, tag: 'LASR', name: 'Laser grid' },
+  safe: { cost: 35, cd: 3, tag: 'SAFE', name: 'Safe' },
+  alarmpanel: { cost: 20, cd: 2, tag: 'ALRM', name: 'Alarm panel' },
+  gate: { cost: 15, cd: 1, tag: 'GATE', name: 'Gate' },
+  server: { cost: 40, cd: 3, tag: 'SRV', name: 'Server' },
+  records: { cost: 45, cd: 3, tag: 'REC', name: 'Records' },
+  vending: { cost: 5, cd: 1, tag: 'VEND', name: 'Vending' },
+  atm: { cost: 15, cd: 2, tag: 'ATM', name: 'ATM' },
+  truck: { cost: 30, cd: 2, tag: 'LOCK', name: 'Truck lock' },
+  barrier: { cost: 10, cd: 1, tag: 'BAR', name: 'Barrier' },
+  billboard: { cost: 15, cd: 3, tag: 'AD', name: 'Billboard' },
+  drone: { cost: 15, cd: 3, tag: 'DRN', name: 'Drone' },
+  bollard: { cost: 25, cd: 4, tag: 'BOL', name: 'Bollards' },
+  subway: { cost: 10, cd: 1, tag: 'METRO', name: 'Subway gate' },
 };
 
 interface Blackout { x: number; z: number; r: number; t: number; dur: number; s: number; block: number; }
@@ -38,7 +56,7 @@ export class HackSystem {
   active = false;
   blend = 0;
   energy = 100;
-  cooldowns: Record<HackKind, number> = { signal: 0, camera: 0, door: 0, lamp: 0, power: 0, alarm: 0, cell: 0 };
+  cooldowns = Object.fromEntries(Object.keys(HACK_INFO).map((k) => [k, 0])) as Record<HackKind, number>;
   hackables: Hackable[] = [];
   selected: Hackable | null = null;
   used = 0;
@@ -145,6 +163,22 @@ export class HackSystem {
         },
       });
     }
+    // street ATMs: skim once each
+    g.street.atms.forEach((a, i) => {
+      let used = false;
+      this.hackables.push({
+        kind: 'atm', label: 'ATM', pos: new THREE.Vector3(a.x, 1.3, a.z), size: new THREE.Vector3(0.9, 1.9, 0.9), range: 25,
+        available: () => !used,
+        act: () => { used = true; g.loot.addCash(150); g.fx.spawn('money', new THREE.Vector3(a.x, 1.2, a.z), 10); g.audio.cash(); g.peds.witnessCrime(new THREE.Vector3(a.x, 0, a.z), 'atm', 1); return 'ATM SKIMMED +$150'; },
+      });
+      void i;
+    });
+    const gb = g.buildings.garageBarrier;
+    if (gb) this.hackables.push({
+      kind: 'barrier', label: 'Garage barrier', pos: gb.mesh.position, size: new THREE.Vector3(0.6, 0.6, 6.2), range: 40,
+      available: () => true,
+      act: () => { gb.open = !gb.open; return gb.open ? 'GARAGE BARRIER UP' : 'GARAGE BARRIER DOWN — COPS BLOCKED'; },
+    });
     // power boxes -> block blackout
     for (const b of g.city.powerBoxes) {
       this.hackables.push({
@@ -188,7 +222,7 @@ export class HackSystem {
   private powerCut(block: number, bx: number, bz: number) {
     const g = this.g;
     const c = g.city.blockCenter(block);
-    this.addBlackout(c.x, c.z, PITCH * 0.62, 25, block);
+    this.addBlackout(c.x, c.z, PITCH * 0.62, 25 + this.g.save.data.upgrades.blackout * 8, block);
     g.city.setBlockPower(block, false);
     // lamps die in a ripple from the power box
     for (const l of g.city.lamps) {
@@ -249,7 +283,7 @@ export class HackSystem {
     this.blend = damp(this.blend, this.active ? 1 : 0, 10, realDt);
     g.post.hack = this.blend;
 
-    this.energy = Math.min(100, this.energy + dt * 6.5);
+    this.energy = Math.min(100, this.energy + dt * (6.5 + g.save.data.upgrades.regen * 2));
     for (const k of Object.keys(this.cooldowns) as HackKind[]) this.cooldowns[k] = Math.max(0, this.cooldowns[k] - dt);
 
     this.updateBlackouts(dt);
@@ -289,8 +323,9 @@ export class HackSystem {
     const info = HACK_INFO[h.kind];
     if (!h.available()) { g.hud.toast('ALREADY HACKED', 'dim'); g.audio.deny(); return; }
     if (this.cooldowns[h.kind] > 0) { g.hud.toast(`${info.tag} COOLDOWN`, 'dim'); g.audio.deny(); return; }
-    if (this.energy < info.cost) { g.hud.toast('NOT ENOUGH ENERGY', 'dim'); g.audio.deny(); return; }
-    this.energy -= info.cost;
+    const cost = Math.round(info.cost * (1 - g.save.data.upgrades.hackCost * 0.15));
+    if (this.energy < cost) { g.hud.toast('NOT ENOUGH ENERGY', 'dim'); g.audio.deny(); return; }
+    this.energy -= cost;
     this.cooldowns[h.kind] = info.cd;
     this.used++;
     const from = g.player.vehicle ? g.player.vehicle.pos.clone().setY(1.6) : g.player.pos.clone().setY(g.player.pos.y + 1.4);
