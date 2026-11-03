@@ -27,7 +27,7 @@ tight, great-feeling, good-looking slice beats a big empty map.
 - Road graph: 7×7 intersections, `RoadGraph` (Dijkstra paths, street names).
 - The Bank: block (1,2), front faces Union Blvd (z = 0). Interior floor y = 0.95.
 - Drop point: Old Garage in block (5,5), roll-up door facing west.
-- Player start: sidewalk across Union Blvd from the bank (-84, 10).
+- Player start: the bank's front sidewalk on Union Blvd (-75, -8.6).
 
 ## File map
 ```

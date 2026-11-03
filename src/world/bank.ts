@@ -4,6 +4,7 @@ import { PAL } from '../core/palette';
 import { GeoBuilder } from './geo';
 import { Collision, AABB } from './collision';
 import { worldMaterials } from './materials';
+import { worldMat } from '../render/patch';
 import { CURB_H } from './layout';
 
 export interface Door {
@@ -36,7 +37,7 @@ export class Bank {
   lootTaken = false;
   guardRoutes: THREE.Vector3[][] = [];
   getawaySpot = { x: -88, z: -43.2, heading: Math.PI / 2 };
-  playerStart = { x: -84, z: 10, heading: Math.PI };
+  playerStart = { x: -75, z: -8.6, heading: Math.PI };
   /** interior bounds (inside walls) */
   interior = { x0: X0 + 0.6, x1: X1 - 0.6, z0: Z0 + 0.6, z1: Z1 - 0.6 };
   /** restricted zone: bank lot behind/around the building + interior */
@@ -117,8 +118,7 @@ export class Bank {
     C.add(-84.6, 0, -31, -83.4, INNER_H, -26.3, true, 'building');
 
     // ceiling (faces down; invisible from above) + roof (faces up)
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0, Z1 - Z0).rotateX(Math.PI / 2).translate((X0 + X1) / 2, INNER_H, (Z0 + Z1) / 2), new THREE.MeshLambertMaterial({ color: '#8c8576' }));
-    ceil.material.onBeforeCompile = M.props.onBeforeCompile;
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0, Z1 - Z0).rotateX(Math.PI / 2).translate((X0 + X1) / 2, INNER_H, (Z0 + Z1) / 2), worldMat({ color: '#8c8576' }));
     this.group.add(ceil);
     const roof = new THREE.Mesh(new THREE.PlaneGeometry(X1 - X0 + 1.6, Z1 - Z0 + 1.6).rotateX(-Math.PI / 2).translate((X0 + X1) / 2, TOP + 0.6, (Z0 + Z1) / 2), M.roof.clone());
     (roof.material as THREE.Material).shadowSide = THREE.DoubleSide;

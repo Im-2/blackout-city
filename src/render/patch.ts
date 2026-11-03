@@ -25,10 +25,10 @@ const FRAG_BODY = /* glsl */ `
     if (b.w <= 0.0) continue;
     float d = length(vBWorld.xz - b.xy);
     dk = max(dk, (1.0 - smoothstep(b.z - 5.0, b.z, d)) * b.w);
-    rim = max(rim, (smoothstep(b.z - 1.6, b.z - 0.4, d) - smoothstep(b.z - 0.4, b.z + 0.6, d)) * b.w);
+    rim = max(rim, (smoothstep(b.z - 1.0, b.z - 0.3, d) - smoothstep(b.z - 0.3, b.z + 0.3, d)) * b.w);
   }
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * vec3(0.13, 0.16, 0.24), dk);
-  gl_FragColor.rgb += vec3(0.27, 0.9, 1.0) * rim * 0.28;
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * vec3(0.11, 0.14, 0.22) + vec3(0.0, 0.004, 0.012), dk);
+  gl_FragColor.rgb += vec3(0.27, 0.9, 1.0) * rim * 0.18;
 }
 `;
 
@@ -36,7 +36,7 @@ export function patchWorld<T extends THREE.Material>(mat: T): T {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uBlack = worldUniforms.uBlack;
     shader.vertexShader = VERT_DECL + shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n' + VERT_BODY);
-    shader.fragmentShader = FRAG_DECL + shader.fragmentShader.replace('#include <fog_fragment>', FRAG_BODY + '\n#include <fog_fragment>');
+    shader.fragmentShader = FRAG_DECL + shader.fragmentShader.replace('#include <fog_fragment>', '#include <fog_fragment>\n' + FRAG_BODY);
   };
   mat.customProgramCacheKey = () => 'bw1';
   return mat;
