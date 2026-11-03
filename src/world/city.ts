@@ -35,6 +35,11 @@ export class City {
   lampPool!: THREE.InstancedMesh;
   parking: SpotInfo[] = [];
   powerBoxes: PowerBoxInfo[] = [];
+  /** street doors pedestrians use to enter/leave buildings (heading = facing out) */
+  doors: { x: number; z: number; heading: number }[] = [];
+  benches: { x: number; z: number; yaw: number }[] = [];
+  /** blocks reserved for hand-built buildings (shops, station, garage…) */
+  reserved = new Map<number, string>();
   cameraSpots: CameraSpot[] = [];
   pedLoops: { x0: number; z0: number; x1: number; z1: number }[] = [];
   dropZone = { x: 0, z: 0, w: 10, d: 12, doorX: 0, doorZ: 0 };
@@ -315,6 +320,7 @@ export class City {
     const inset = r.range(1, 3);
     const floors = r.int(9, 18);
     this.building(bucket, lot.x0 + inset, lot.z0 + inset, lot.x1 - inset, lot.z1 - inset, floors, style, { plinth: r.pick(['grey', 'warm']), setback: 2 });
+    this.streetDoor(lot.x0 + inset, lot.z0 + inset, lot.x1 - inset, lot.z1 - inset, lot);
     // planters at the base
     const cx = (lot.x0 + lot.x1) / 2, cz = lot.z1 + 1.5;
     this.planter(cx - 8, cz);
@@ -333,6 +339,7 @@ export class City {
         const floors = style === 'office' ? r.int(5, 9) : r.int(central ? 3 : 2, central ? 7 : 5);
         const plinth = style === 'office' || style === 'concrete' ? 'grey' : r.chance(0.35) ? 'warm' : undefined;
         this.building(bucket, x0, z0, x1, z1, floors, style, plinth ? { plinth, setback: r.chance(0.5) ? 1 : 0 } : {});
+        this.streetDoor(x0, z0, x1, z1, lot);
       }
   }
 
@@ -504,7 +511,28 @@ export class City {
     this.col.addCentered(x, z, 0.3, 0.3, 6, 0, false, 'pole');
   }
 
+  /** A door on the building face that sits on the lot edge closest to the street. */
+  private streetDoor(x0: number, z0: number, x1: number, z1: number, lot: { x0: number; z0: number; x1: number; z1: number }) {
+    const opts: [number, number, number][] = [];
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    if (Math.abs(z0 - lot.z0) < 0.6) opts.push([cx, z0, Math.PI]);
+    if (Math.abs(z1 - lot.z1) < 0.6) opts.push([cx, z1, 0]);
+    if (Math.abs(x0 - lot.x0) < 0.6) opts.push([x0, cz, -Math.PI / 2]);
+    if (Math.abs(x1 - lot.x1) < 0.6) opts.push([x1, cz, Math.PI / 2]);
+    if (!opts.length) return;
+    const [x, z, h] = this.rng.pick(opts);
+    const fx = Math.sin(h), fz = Math.cos(h);
+    // recessed dark door + frame + small awning
+    const w = 1.6, ww = Math.abs(fz) * w + 0.12, dd = Math.abs(fx) * w + 0.12;
+    this.props.cbox(x + fx * 0.02, CURB_H + 1.2, z + fz * 0.02, ww + Math.abs(fz) * 0.3, 2.5, dd + Math.abs(fx) * 0.3, { color: '#3a3430' });
+    this.props.cbox(x + fx * 0.05, CURB_H + 1.1, z + fz * 0.05, ww, 2.2, dd, { color: '#5a4030' });
+    this.props.cbox(x + fx * 0.06, CURB_H + 1.4, z + fz * 0.06, Math.abs(fz) * 1.2 + 0.1, 0.9, Math.abs(fx) * 1.2 + 0.1, { color: '#c9a865' });
+    this.props.cbox(x + fx * 0.5, CURB_H + 2.75, z + fz * 0.5, Math.abs(fz) * 2.2 + Math.abs(fx), 0.12, Math.abs(fx) * 2.2 + Math.abs(fz), { color: this.rng.pick(['#4a5b39', '#7b3a2a', '#2f3b4d']) });
+    this.doors.push({ x: x + fx * 0.8, z: z + fz * 0.8, heading: h });
+  }
+
   private bench(x: number, z: number, yaw: number) {
+    this.benches.push({ x, z, yaw });
     const g = new GeoBuilder();
     g.cbox(0, 0.45, 0, 1.8, 0.1, 0.5, { color: '#6b4a30' });
     g.cbox(0, 0.8, -0.22, 1.8, 0.4, 0.08, { color: '#6b4a30' });

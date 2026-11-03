@@ -7,7 +7,7 @@ import { BLOCKS, PITCH } from '../world/layout';
 import type { Game } from '../core/game';
 import type { Vehicle } from '../vehicles/vehicle';
 
-export type HackKind = 'signal' | 'camera' | 'door' | 'lamp' | 'power' | 'alarm';
+export type HackKind = 'signal' | 'camera' | 'door' | 'lamp' | 'power' | 'alarm' | 'cell';
 
 export interface Hackable {
   kind: HackKind;
@@ -27,6 +27,7 @@ export const HACK_INFO: Record<HackKind, { cost: number; cd: number; tag: string
   lamp: { cost: 8, cd: 0.6, tag: 'LMP', name: 'Street lamp' },
   power: { cost: 40, cd: 8, tag: 'PWR', name: 'Power box' },
   alarm: { cost: 12, cd: 2, tag: 'ALM', name: 'Car alarm' },
+  cell: { cost: 20, cd: 4, tag: 'CELL', name: 'Cell tower' },
 };
 
 interface Blackout { x: number; z: number; r: number; t: number; dur: number; s: number; block: number; }
@@ -37,7 +38,7 @@ export class HackSystem {
   active = false;
   blend = 0;
   energy = 100;
-  cooldowns: Record<HackKind, number> = { signal: 0, camera: 0, door: 0, lamp: 0, power: 0, alarm: 0 };
+  cooldowns: Record<HackKind, number> = { signal: 0, camera: 0, door: 0, lamp: 0, power: 0, alarm: 0, cell: 0 };
   hackables: Hackable[] = [];
   selected: Hackable | null = null;
   used = 0;
@@ -128,6 +129,19 @@ export class HackSystem {
           g.peds.panic(p, 9);
           g.audio.pop();
           return 'LAMP OVERLOADED';
+        },
+      });
+    }
+    // cell towers: jam witness calls nearby
+    for (const t of g.street.towers) {
+      this.hackables.push({
+        kind: 'cell', label: 'Cell tower', pos: new THREE.Vector3(t.x, 18, t.z), size: new THREE.Vector3(2, 8, 2), range: 70, ref: t,
+        available: () => t.disabledT <= 0,
+        act: () => {
+          t.disabledT = 30;
+          g.fx.spawn('spark', new THREE.Vector3(t.x, 21, t.z), 20);
+          g.fx.ring(new THREE.Vector3(t.x, 0.3, t.z), 150, '#46e6ff', 1.4);
+          return 'CELL TOWER JAMMED — NO 911 CALLS 30s';
         },
       });
     }

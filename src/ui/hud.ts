@@ -47,6 +47,9 @@ export class Hud {
   private miniCtx: CanvasRenderingContext2D;
   private mapBase: HTMLCanvasElement | null = null;
   private letterbox: HTMLDivElement;
+  private radioEl: HTMLDivElement;
+  private radioT = 0;
+  private debugEl: HTMLDivElement;
   screens: Record<string, HTMLDivElement> = {};
   visible = true;
   photo = false;
@@ -109,6 +112,10 @@ export class Hud {
     this.crosshair = h('div', 'crosshair') as HTMLDivElement;
     this.hudLayer.append(this.prompt, this.toasts, this.hintEl, this.bustEl, this.susEl, this.marker, this.crosshair);
 
+    this.radioEl = h('div', 'panel radio') as HTMLDivElement;
+    this.debugEl = h('div', 'debugov') as HTMLDivElement;
+    this.hudLayer.append(this.radioEl);
+    this.root.appendChild(this.debugEl);
     this.letterbox = h('div', 'letterbox', '<div></div><div></div>') as HTMLDivElement;
     this.root.appendChild(this.letterbox);
 
@@ -147,6 +154,12 @@ export class Hud {
     while (this.toasts.children.length > 3) this.toasts.firstChild!.remove();
     setTimeout(() => t.classList.add('out'), 1800);
     setTimeout(() => t.remove(), 2400);
+  }
+
+  radio(text: string) {
+    this.radioEl.innerHTML = `<span class="tag">RADIO</span> ${text}`;
+    this.radioEl.classList.add('on');
+    this.radioT = 6;
   }
 
   hint(text: string) {
@@ -232,6 +245,22 @@ export class Hud {
     this.prompt.textContent = label ? `[E] ${label}` : v && v.speedAbs < 6 ? '' : '';
     this.prompt.style.display = label ? 'block' : 'none';
 
+    this.radioT -= dt;
+    if (this.radioT <= 0) this.radioEl.classList.remove('on');
+    this.debugEl.style.display = g.debugOverlay ? 'block' : 'none';
+    if (g.debugOverlay && Math.floor(this.t * 4) !== Math.floor((this.t - dt) * 4)) {
+      const i = g.renderer.info.render;
+      const c = g.peds.stats;
+      this.debugEl.textContent = [
+        `FPS ${g.fps.toFixed(0)}  FRAME ${g.frameMs.toFixed(1)}ms (avg ${g.quality.ema.toFixed(1)})`,
+        `QUALITY ${g.quality.p.name}${g.quality.auto ? ' AUTO' : ''}  [F4]`,
+        `DRAW ${i.calls}  TRIS ${(i.triangles / 1000).toFixed(0)}k`,
+        `PEDS ${c.total}  FULL ${c.full}  GHOST ${c.ghost}  CALLING ${c.calling}`,
+        `VEHICLES ${g.vehicles.length}  TRAFFIC ${g.traffic.cars.length}  COPS ${g.police.units.length}  OFFICERS ${g.police.officers.length}`,
+        `HEAT ${g.police.heat} (${g.police.progress.toFixed(2)})  UNSEEN ${g.police.lastSeenT.toFixed(1)}s`,
+        `POS ${g.player.worldPos.x.toFixed(0)},${g.player.worldPos.z.toFixed(0)}`,
+      ].join('\n');
+    }
     // hints
     this.hintT -= dt;
     if (this.hintT <= 0) this.hintEl.classList.remove('on');

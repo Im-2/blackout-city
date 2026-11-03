@@ -23,6 +23,8 @@ export interface Skin {
   badge?: boolean;
   belt?: string;
   bracelet?: string;
+  hivis?: boolean;
+  props?: ('briefcase' | 'parcel' | 'phone' | 'camera' | 'hardhat' | 'guitar' | 'backpack' | 'apron')[];
   height: number;
   width: number;
 }

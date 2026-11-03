@@ -7,7 +7,7 @@ import { makeCanvas, mottle, toTexture } from '../assets/textures';
 import { patchWorld } from '../render/patch';
 import { damp, clamp } from '../core/math';
 
-export type AnimState = 'idle' | 'walk' | 'run' | 'drive' | 'panic' | 'handsup' | 'cuffed' | 'fall' | 'vault' | 'hack' | 'carry';
+export type AnimState = 'idle' | 'walk' | 'run' | 'drive' | 'panic' | 'handsup' | 'cuffed' | 'fall' | 'vault' | 'hack' | 'carry' | 'sit' | 'phone' | 'chat' | 'busk' | 'ride' | 'climb';
 
 export interface CharacterView {
   root: THREE.Object3D;
@@ -82,6 +82,15 @@ function partsFor(skin: Skin): Part[] {
   if (skin.glasses) p.push({ name: 'glasses', bone: H, c: [0, 0.165, 0.145], s: [0.23, 0.05, 0.02] });
   if (skin.topStyle === 'hoodie') p.push({ name: 'hood', bone: B.spine, c: [0, 0.58, -0.08], s: [0.32, 0.1, 0.12] });
   if (skin.topStyle === 'uniform' || skin.belt) p.push({ name: 'belt', bone: B.hips, c: [0, 0.06, 0], s: [0.36, 0.06, 0.22] });
+  const pr = skin.props ?? [];
+  if (pr.includes('briefcase')) p.push({ name: 'briefcase', bone: B.faR, c: [0, -0.42, 0.02], s: [0.08, 0.3, 0.42] });
+  if (pr.includes('parcel')) p.push({ name: 'parcel', bone: B.spine, c: [0, 0.18, 0.28], s: [0.38, 0.26, 0.3] });
+  if (pr.includes('phone')) p.push({ name: 'phone', bone: B.faR, c: [0, -0.36, 0.05], s: [0.03, 0.12, 0.07] });
+  if (pr.includes('camera')) p.push({ name: 'camera', bone: B.spine, c: [0, 0.38, 0.15], s: [0.16, 0.1, 0.08] });
+  if (pr.includes('hardhat')) p.push({ name: 'hardhat', bone: B.head, c: [0, 0.33, 0.01], s: [0.3, 0.09, 0.32] });
+  if (pr.includes('guitar')) p.push({ name: 'guitar', bone: B.spine, c: [0, 0.22, 0.17], s: [0.5, 0.2, 0.08] });
+  if (pr.includes('backpack')) p.push({ name: 'backpack', bone: B.spine, c: [0, 0.32, -0.18], s: [0.32, 0.38, 0.14] });
+  if (pr.includes('apron')) p.push({ name: 'apron', bone: B.spine, c: [0, 0.12, 0.115], s: [0.36, 0.42, 0.02] });
   if (skin.topStyle === 'uniform') {
     p.push({ name: 'holster', bone: B.hips, c: [-0.19, -0.02, 0.0], s: [0.06, 0.16, 0.1] });
     p.push({ name: 'pouch', bone: B.hips, c: [0.19, 0.0, 0.03], s: [0.05, 0.1, 0.08] });
@@ -216,6 +225,7 @@ function paint(ctx: CanvasRenderingContext2D, part: string, face: Face, r: Rect,
         if (k.topStyle === 'tee') px(W / 2 - 2, 0, 4, 1, k.skin);
       }
       if (face === 'nz' && k.topStyle === 'hoodie') px(2, 0, W - 4, 4, '#3f7f24');
+      if (k.hivis && face !== 'py') { px(0, H * 0.45, W, 2, '#d8d8c8'); px(0, H * 0.75, W, 2, '#d8d8c8'); }
       if (face === 'py') px(r.w / 2 - 2, 0, 4, r.h, k.skin);
       darkBottom(0.2);
       break;
@@ -274,6 +284,14 @@ function paint(ctx: CanvasRenderingContext2D, part: string, face: Face, r: Rect,
       if (face === 'py' && k.shoes === '#6b3f24') px(1, r.h / 2 - 1, W - 2, 1, '#8a5a34'); // loafer strap
       if (face === 'py' && k.sole) px(W / 2 - 0.5, 2, 1, r.h - 4, k.sole);
       break;
+    case 'briefcase': fill('#3a2a20', 0.05); if (face === 'px' || face === 'nx') px(1, 1, W - 2, 1, '#a08050'); break;
+    case 'parcel': fill('#a8844e', 0.08); if (face === 'pz' || face === 'py') { px(W / 2 - 0.5, 0, 1, H, '#d8c890'); } break;
+    case 'phone': fill('#151515', 0.03); if (face === 'pz') px(0, 1, W, H - 2, '#5aa0c8'); break;
+    case 'camera': fill('#1e1e1e', 0.04); if (face === 'pz') px(W / 2 - 1, 1, 2, 2, '#6a8aa0'); break;
+    case 'hardhat': fill('#e0b020', 0.06); darkBottom(0.3); break;
+    case 'guitar': fill('#8a5a2a', 0.08); if (face === 'pz') { px(W / 2 - 1, 1, 2, H - 2, '#2a1a10'); px(1, 1, W / 3, H - 2, '#6a4020'); } break;
+    case 'backpack': fill(k.cap ?? '#3a4a5a', 0.07); darkBottom(0.25); break;
+    case 'apron': fill('#d8d0bc', 0.05); break;
     default:
       fill('#888888');
   }
@@ -456,6 +474,74 @@ export class RigCharacter implements CharacterView {
         this.set(B.head, run ? -0.12 : 0.06);
         this.hipYTarget = -Math.abs(Math.cos(p)) * (run ? 0.07 : 0.035);
         tilt = 0;
+        break;
+      }
+      case 'sit': {
+        this.set(B.thL, -1.5, 0.1);
+        this.set(B.thR, -1.5, -0.1);
+        this.set(B.shL, 1.5);
+        this.set(B.shR, 1.5);
+        this.set(B.uaL, -0.3, 0, 0.1);
+        this.set(B.uaR, -0.3, 0, -0.1);
+        this.set(B.faL, -0.9);
+        this.set(B.faR, -0.9);
+        this.set(B.spine, 0.12 + s(t * 1.4) * 0.02);
+        this.set(B.head, 0.25 + s(t * 0.3) * 0.08, s(t * 0.2) * 0.3);
+        this.hipYTarget = -0.47;
+        break;
+      }
+      case 'phone': {
+        this.set(B.uaR, -0.4, 0, -0.5);
+        this.set(B.faR, -2.4, 0, 0);
+        this.set(B.uaL, 0.1, 0, 0.15);
+        this.set(B.faL, -0.3);
+        this.set(B.head, 0.05 + s(t * 2) * 0.05, s(t * 0.8) * 0.4, 0.15);
+        this.set(B.spine, 0.04);
+        break;
+      }
+      case 'chat': {
+        const gest = s(t * 2.3 + this.phase);
+        this.set(B.uaR, -0.5 - gest * 0.3, 0, -0.2);
+        this.set(B.faR, -1.0 + gest * 0.3);
+        this.set(B.uaL, 0.05, 0, 0.15);
+        this.set(B.faL, -0.4);
+        this.set(B.head, 0.05, s(t * 0.7) * 0.25);
+        this.set(B.spine, 0.04 + gest * 0.03);
+        break;
+      }
+      case 'busk': {
+        const strum = s(t * 9);
+        this.set(B.uaR, -0.6, 0, -0.1);
+        this.set(B.faR, -1.2 + strum * 0.25, 0.4);
+        this.set(B.uaL, -0.9, 0.5, 0.3);
+        this.set(B.faL, -1.4);
+        this.set(B.head, 0.2 + s(t * 2) * 0.08, s(t * 1.1) * 0.15);
+        this.hipYTarget = Math.abs(s(t * 2.2)) * -0.03;
+        break;
+      }
+      case 'climb': {
+        const c = s(t * 7);
+        this.set(B.uaL, -2.8 + c * 0.4, 0, 0.2);
+        this.set(B.uaR, -2.8 - c * 0.4, 0, -0.2);
+        this.set(B.faL, -0.5);
+        this.set(B.faR, -0.5);
+        this.set(B.thL, -0.8 + c * 0.6);
+        this.set(B.thR, -0.8 - c * 0.6);
+        this.set(B.shL, 1.2);
+        this.set(B.shR, 1.2);
+        break;
+      }
+      case 'ride': {
+        this.set(B.thL, -1.2, 0.15);
+        this.set(B.thR, -1.2, -0.15);
+        this.set(B.shL, 1.0);
+        this.set(B.shR, 1.0);
+        this.set(B.uaL, -1.1, 0, 0.25);
+        this.set(B.uaR, -1.1, 0, -0.25);
+        this.set(B.faL, -0.3);
+        this.set(B.faR, -0.3);
+        this.set(B.spine, 0.45);
+        this.hipYTarget = -0.2;
         break;
       }
       case 'drive': {

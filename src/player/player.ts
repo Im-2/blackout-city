@@ -30,6 +30,8 @@ export class Player {
   vehicle: Vehicle | null = null;
   grounded = true;
   busted = false;
+  /** hiding in a dumpster / van / wardrobe */
+  hidden = false;
   knockT = 0;
   private vault: { t: number; dur: number; from: THREE.Vector3; to: THREE.Vector3; top: number } | null = null;
   focus: Interactable | Vehicle | null = null;
@@ -38,6 +40,17 @@ export class Player {
   constructor(private g: Game) {
     this.view = createCharacter('player', PLAYER_SKIN);
     g.scene.add(this.view.root);
+  }
+
+  /** Disguises: rebuild the character with a new outfit. */
+  setSkin(skin: import('../characters/skins').Skin) {
+    const parent = this.view.root.parent;
+    const pos = this.view.root.position.clone(), rot = this.view.root.rotation.y;
+    parent?.remove(this.view.root);
+    this.view = createCharacter('player', skin);
+    (parent ?? this.g.scene).add(this.view.root);
+    this.view.root.position.copy(pos);
+    this.view.root.rotation.y = rot;
   }
 
   spawn(x: number, z: number, heading: number) {

@@ -13,7 +13,7 @@ interface P {
   spin: number;
 }
 
-export type FxKind = 'spark' | 'smoke' | 'debris' | 'hack' | 'glass' | 'dust' | 'fire' | 'money';
+export type FxKind = 'spark' | 'smoke' | 'debris' | 'hack' | 'glass' | 'dust' | 'fire' | 'money' | 'steam' | 'rain' | 'paint';
 
 export class Fx {
   mesh: THREE.InstancedMesh;
@@ -36,7 +36,7 @@ export class Fx {
     scene.add(this.mesh);
   }
 
-  spawn(kind: FxKind, pos: THREE.Vector3, count: number, dir?: THREE.Vector3, power = 1) {
+  spawn(kind: FxKind, pos: THREE.Vector3, count: number, dir?: THREE.Vector3, power = 1, color?: string) {
     for (let i = 0; i < count; i++) {
       if (this.ps.length >= MAX) this.ps.shift();
       const R = () => Math.random() * 2 - 1;
@@ -82,12 +82,24 @@ export class Fx {
           p.max = 0.6 + Math.random() * 0.5; p.size = 0.2; p.grow = 0.6; p.g = 0.3; p.drag = 2.5;
           this.c.set('#6e6a62'); break;
         }
+        case 'steam': {
+          p.vx = R() * 0.3 + 0.4; p.vy = 1.2 + Math.random() * 0.8; p.vz = R() * 0.3 + 0.2;
+          p.max = 1.6 + Math.random(); p.size = 0.3; p.grow = 1.1; p.g = 0.4; p.drag = 1.2;
+          const g = 0.62 + Math.random() * 0.12; this.c.setRGB(g, g, g * 1.02); break;
+        }
+        case 'paint': {
+          const sp = 3 * power;
+          p.vx = R() * sp; p.vy = Math.random() * sp; p.vz = R() * sp;
+          p.max = 0.8; p.size = 0.12; p.g = -6; p.drag = 2;
+          this.c.set('#c96a3a'); break;
+        }
         case 'money': {
           p.vx = R() * 2; p.vy = 2 + Math.random() * 3; p.vz = R() * 2;
           p.max = 1.4; p.size = 0.12; p.g = -4; p.drag = 1.8;
           this.c.set(Math.random() < 0.5 ? '#7fae5a' : '#d9b04a'); break;
         }
       }
+      if (color) this.c.set(color);
       p.r = this.c.r; p.gc = this.c.g; p.b = this.c.b;
       this.ps.push(p);
     }

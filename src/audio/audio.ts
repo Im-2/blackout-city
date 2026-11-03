@@ -161,6 +161,22 @@ export class Audio {
   }
   door() { this.noise(0.08, 0.2, 800, 'bandpass'); this.tone('sine', 140, 90, 0.1, 0.15, 0.03); }
   whoosh() { this.noise(0.25, 0.12, 900, 'bandpass'); }
+  scream(pos?: THREE.Vector3) {
+    const a = this.att(pos, 45);
+    if (a < 0.05) return;
+    const f = 520 + Math.random() * 260;
+    this.tone('sawtooth', f, f * 1.35, 0.25, 0.05 * a);
+    this.tone('sawtooth', f * 1.35, f * 0.8, 0.45, 0.05 * a, 0.22);
+  }
+  flutter(pos?: THREE.Vector3) {
+    const a = this.att(pos, 30);
+    if (a < 0.05) return;
+    for (let i = 0; i < 5; i++) this.noise(0.05, 0.08 * a, 1800, 'bandpass', i * 0.05);
+  }
+  ring() { this.tone('square', 1300, 1300, 0.08, 0.05); this.tone('square', 1300, 1300, 0.08, 0.05, 0.12); }
+  cash() { this.tone('square', 1568, 1568, 0.06, 0.07); this.tone('square', 2093, 2093, 0.12, 0.07, 0.07); this.noise(0.08, 0.1, 5000, 'highpass', 0.02); }
+  spray() { this.noise(0.9, 0.18, 3200, 'highpass'); }
+  train(pos?: THREE.Vector3) { const a = this.att(pos, 90); if (a < 0.05) return; this.noise(2.5, 0.35 * a, 220); this.tone('sawtooth', 70, 50, 2.5, 0.12 * a); }
   loot() { [0, 4, 7, 12].forEach((s, i) => this.tone('square', 523 * Math.pow(2, s / 12), 523 * Math.pow(2, s / 12), 0.12, 0.08, i * 0.06)); }
   heatUp() { this.tone('sawtooth', 200, 260, 0.25, 0.08); this.tone('sawtooth', 260, 330, 0.25, 0.08, 0.15); }
   win() { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => this.tone('square', 392 * Math.pow(2, s / 12), 392 * Math.pow(2, s / 12), 0.25, 0.08, i * 0.09)); }

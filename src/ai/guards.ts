@@ -62,7 +62,7 @@ export class Guards {
   }
 
   alertAll(pos: THREE.Vector3) {
-    // a beat of surprise before they react — gives the player a chance to bolt
+    // a beat of surprise before they react â€” gives the player a chance to bolt
     for (const gd of this.guards) { if (!gd.alert) gd.reactT = 0.9; gd.alert = true; gd.goal = pos.clone(); }
   }
 

@@ -27,6 +27,12 @@ import { Audio } from '../audio/audio';
 import { updateDebug } from '../debug/debug';
 import { loadCharacterModels } from '../characters/loader';
 import { blockCenter } from '../world/layout';
+import { Quality } from './quality';
+import { Save } from './save';
+import { StreetLife } from '../world/streetlife';
+import { Ambient } from '../render/ambient';
+import { News } from '../ui/news';
+import { Disguise } from '../player/disguise';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results';
 
@@ -58,6 +64,14 @@ export class Game {
   cameras!: SecurityCameras;
   hack!: HackSystem;
   heist!: Heist;
+  quality: Quality;
+  save = new Save();
+  street!: StreetLife;
+  ambient!: Ambient;
+  news!: News;
+  disguise!: Disguise;
+  debugOverlay = false;
+  frameMs = 16;
   vehicles: Vehicle[] = [];
   parked: Vehicle[] = [];
   getawayCar: Vehicle | null = null;
@@ -85,7 +99,9 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.info.autoReset = false;
     this.input = new Input(canvas);
+    this.quality = new Quality(this);
     this.input.onLockChange = (locked) => {
       if (!locked && this.wasLocked && this.state === 'playing') this.pause();
       this.wasLocked = locked;
@@ -117,6 +133,8 @@ export class Game {
     this.fx = new Fx(this.scene, this.post.overlay);
     this.skids = new Skids(this.scene);
     this.routes = new RouteMemory(this.city.graph);
+    this.street = new StreetLife(this.city, this.col).build();
+    this.scene.add(this.street.group);
     await step(0.65, 'looking for character models');
     const found = await loadCharacterModels((m) => H.loading(0.7, m));
     if (found.length) console.info('[models] using', found.join(', '));
@@ -132,7 +150,11 @@ export class Game {
     this.hack = new HackSystem(this);
     this.hack.build();
     this.heist = new Heist(this);
+    this.news = new News(this);
+    this.disguise = new Disguise(this);
+    this.ambient = new Ambient(this);
     await step(0.9, 'compiling shaders');
+    this.quality.apply();
     this.reset(this.clipMode);
     this.renderer.compile(this.scene, this.camera);
     await step(1, 'ready');
@@ -232,6 +254,9 @@ export class Game {
     this.traffic.reset();
     this.peds.reset();
     this.guards.reset();
+    this.ambient.reset();
+    this.news.reset();
+    this.disguise.reset();
 
     if (clip) {
       // instant chase: mid-city, next to the getaway car, heat 3
@@ -306,6 +331,7 @@ export class Game {
   }
 
   onPedHit(pos: THREE.Vector3) {
+    this.peds.witnessCrime(pos, 'hit-and-run', 1);
     if (this.police.units.some((u) => u.pos.distanceTo(pos) < 45)) this.police.crime(1, 'hit-and-run');
   }
 
@@ -330,7 +356,10 @@ export class Game {
 
   // ------------------------------------------------------------------ loop
   private frame() {
-    const realDt = Math.min(this.clock.getDelta(), 0.05);
+    const rawDt = this.clock.getDelta();
+    const realDt = Math.min(rawDt, 0.05);
+    this.frameMs = rawDt * 1000;
+    if (this.state === 'playing') this.quality.sample(this.frameMs, realDt);
     this.fpsT += realDt;
     this.fpsN++;
     if (this.fpsT > 1) { this.fps = this.fpsN / this.fpsT; this.fpsT = 0; this.fpsN = 0; }
@@ -340,6 +369,8 @@ export class Game {
     if (inp.pressed('KeyH')) this.hud.setVisible(!this.hud.visible);
     if (inp.pressed('F2')) this.hud.setPhoto(!this.hud.photo);
     if (inp.pressed('KeyM')) this.hud.toast(this.audio.toggleMute() ? 'MUTED' : 'SOUND ON', 'dim');
+    if (inp.pressed('F3')) this.debugOverlay = !this.debugOverlay;
+    if (inp.pressed('F4')) this.quality.cycle();
     if (inp.pressed('KeyR') && (this.state === 'results' || this.state === 'playing' || this.state === 'paused')) this.restart();
     if (inp.pressed('Escape') && this.state === 'paused') this.resume();
     else if (inp.pressed('KeyP') && this.state === 'playing') { this.input.unlock(); this.pause(); }
@@ -368,6 +399,7 @@ export class Game {
       this.camera.lookAt(P.x, P.y + 1, P.z);
       this.fx.update(realDt * 0.3);
     }
+    this.renderer.info.reset();
     this.post.render(this.scene, this.camera, realDt, this.time);
     inp.endFrame();
   }
@@ -400,6 +432,9 @@ export class Game {
     this.cameras.update(dt);
     this.guards.update(dt);
     this.peds.update(dt);
+    this.ambient.update(dt);
+    this.street.update(dt);
+    this.news.update(realDt);
     this.hack.update(realDt, dt);
     this.heist.update(dt);
     this.bank.update(dt, this.time, this.heist.alarm);

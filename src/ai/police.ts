@@ -71,6 +71,15 @@ export class Police {
   private hintT = 0;
   private stakeoutDone = false;
   heli: Heli | null = null;
+  /** the car the police are looking for */
+  knownVehicle: { id: number; color: string } | null = null;
+
+  vehicleRecogniseRange(normal: number) {
+    const v = this.g.player.vehicle;
+    if (!v || !this.knownVehicle) return normal;
+    if (this.knownVehicle.id === v.id && this.knownVehicle.color === v.color) return normal;
+    return Math.min(normal, 10);
+  }
   roadblocks: Vehicle[][] = [];
 
   constructor(private g: Game) {}
@@ -85,6 +94,7 @@ export class Police {
     this.progress = 0;
     this.peak = 0;
     this.minHeat = 0;
+    this.knownVehicle = null;
     this.lastSeenT = 999;
     this.bust = 0;
     this.stakeoutDone = false;
@@ -105,8 +115,12 @@ export class Police {
       this.g.hud.toast(`HEAT ${n}${reason ? ' — ' + reason : ''}`, 'heat');
       this.g.audio.heatUp();
     }
+    const prev = this.heat;
     this.heat = n;
     this.progress = 0.05;
+    // escalation beats fire immediately so short clips show them
+    if (n >= 4 && prev < 4) this.roadblockT = 2.5;
+    if (n >= 5 && prev < 5) this.spawnUnit('pursuit', undefined, undefined, 45, 110, 'swat');
     this.peak = Math.max(this.peak, n);
     if (n > 0) { this.lastKnown.copy(this.g.player.worldPos); this.lastSeenT = Math.min(this.lastSeenT, 0.5); }
   }
@@ -192,7 +206,12 @@ export class Police {
     }
 
     // heat dynamics
-    if (this.seenNow) { this.lastSeenT = 0; this.lastKnown.copy(P); }
+    if (this.seenNow) {
+      this.lastSeenT = 0;
+      this.lastKnown.copy(P);
+      if (g.player.vehicle) this.knownVehicle = { id: g.player.vehicle.id, color: g.player.vehicle.color };
+      else g.disguise.seen();
+    }
     if (this.heat > 0) {
       const inBlack = g.hack.isBlackedOut(P.x, P.z);
       if (this.lastSeenT < 0.5) this.progress += dt / (20 + this.heat * 7);
@@ -221,6 +240,15 @@ export class Police {
     this.seenNow = true;
   }
 
+  /** Disguise / respray / swap: the description they were working from is stale. */
+  onDescriptionLost(kind: 'outfit' | 'vehicle') {
+    if (this.heat === 0) return;
+    if (this.lastSeenT < 0.6 && kind === 'vehicle') return; // they watched you do it
+    this.lastSeenT = Math.max(this.lastSeenT, 6);
+    this.progress = Math.max(0, this.progress - 0.45);
+    this.g.news.report('lost', this.g.player.worldPos.x, this.g.player.worldPos.z);
+  }
+
   private sight(u: Vehicle, dt: number, d: number) {
     const ai = u.ai as CopAI;
     ai.checkT -= dt;
@@ -246,6 +274,9 @@ export class Police {
     const g = this.g;
     if (g.player.busted) return false;
     const P = g.player.worldPos;
+    if (!g.player.vehicle) range = g.disguise.recogniseRange(range);
+    else range = g.police.vehicleRecogniseRange(range);
+    if (g.player.hidden) return false;
     if (d > range) return false;
     if (g.hack.isBlackedOut(P.x, P.z) && d > 11) return false;
     if (g.bank.isInside(P.x, P.z) !== g.bank.isInside(x, z)) return false;
@@ -273,9 +304,9 @@ export class Police {
   }
 
   // ------------------------------------------------------------------ spawning
-  private spawnUnit(mode: Mode, at?: { x: number; z: number; heading: number }, street?: string, near = 75, far = 170): Vehicle | null {
+  private spawnUnit(mode: Mode, at?: { x: number; z: number; heading: number }, street?: string, near = 75, far = 170, force?: 'swat' | 'moto'): Vehicle | null {
     const g = this.g;
-    const swat = this.heat >= 5 && this.units.filter((u) => u.kind === 'swat').length < 2 && this.rng.chance(0.5);
+    const swat = force === 'swat' || (this.heat >= 5 && this.units.filter((u) => u.kind === 'swat').length < 2 && this.rng.chance(0.5));
     const v = new Vehicle(swat ? 'swat' : 'police', '#1c1c1e', g.col);
     v.driver = 'cop';
     const ai: CopAI = { mode, pts: [], idx: 0, repathT: 0, stuckT: 0, reverseT: 0, sees: false, checkT: 0, deployed: false, officers: [], a: 0, b: 0, c: 0, phase: 'edge', wanderT: 0, street };
@@ -356,18 +387,23 @@ export class Police {
     const dirx = v ? v.vx : Math.sin(g.camRig.yaw), dirz = v ? v.vz : Math.cos(g.camRig.yaw);
     const dl = Math.hypot(dirx, dirz) || 1;
     let best: REdge | null = null, bs = -Infinity;
-    for (const e of g.city.graph.edges) {
-      const A = g.city.graph.nodes[e.a], B = g.city.graph.nodes[e.b];
-      const mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
-      const dx = mx - P.x, dz = mz - P.z;
-      const d = Math.hypot(dx, dz);
-      if (d < 60 || d > 150) continue;
-      const ahead = (dx * dirx + dz * dirz) / (d * dl);
-      if (ahead < 0.35) continue;
-      const score = ahead + g.routes.intensity(e) * 2.5 + this.rng.next() * 0.4;
-      if (score > bs) { bs = score; best = e; }
+    // prefer edges dead ahead; relax the cone if the player is stationary/cornered
+    for (const minAhead of [0.5, -0.2]) {
+      for (const e of g.city.graph.edges) {
+        const A = g.city.graph.nodes[e.a], B = g.city.graph.nodes[e.b];
+        const mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
+        const dx = mx - P.x, dz = mz - P.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 40 || d > 120) continue;
+        const ahead = (dx * dirx + dz * dirz) / (d * dl);
+        if (ahead < minAhead) continue;
+        if (g.vehicles.some((o) => Math.hypot(o.pos.x - mx, o.pos.z - mz) < 7)) continue;
+        const score = ahead + g.routes.intensity(e) * 2.5 + this.rng.next() * 0.4;
+        if (score > bs) { bs = score; best = e; }
+      }
+      if (best) break;
     }
-    if (!best) return;
+    if (!best) { this.roadblockT = 2; return; }
     const A = g.city.graph.nodes[best.a], B = g.city.graph.nodes[best.b];
     const mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
     const along = Math.atan2(B.x - A.x, B.z - A.z);
@@ -682,7 +718,7 @@ class Heli {
     this.spot = new THREE.Mesh(new THREE.CircleGeometry(7, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#fff2c8', transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
     g.scene.add(this.spot);
     const P = g.player.worldPos;
-    this.pos.set(P.x + 120, 40, P.z - 120);
+    this.pos.set(P.x + 60, 40, P.z - 60);
     this.spotPos.copy(P);
     g.scene.add(this.group);
     g.hud.toast('HELICOPTER INBOUND', 'heat');

@@ -141,3 +141,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
   .minimap { width: 130px; height: 130px; }
   .ctl-grid { grid-template-columns: 1fr; }
 }
+
+.radio { left: 232px; bottom: 18px; padding: 5px 12px; font-size: 18px; color: #c8d8c0; max-width: 420px; opacity: 0; transform: translateY(8px); transition: opacity 0.3s, transform 0.3s; }
+.radio.on { opacity: 1; transform: none; }
+.radio .tag { color: #0a1218; background: var(--sage); padding: 0 4px; margin-right: 4px; }
+.witness { position: absolute; left: 0; top: 0; text-align: center; pointer-events: none; }
+.witness .wi { font-size: 16px; color: #fff; background: #b8231c; padding: 0 5px; box-shadow: 0 0 0 2px #000; animation: blink 0.5s steps(2) infinite; white-space: nowrap; }
+.witness .wb { height: 4px; background: #000; margin-top: 2px; }
+.witness .wb i { display: block; height: 100%; width: 0; background: #ff5a4a; }
+.debugov { position: absolute; right: 18px; top: 150px; white-space: pre; font-size: 16px; line-height: 1.05; color: #9fffb0; background: rgba(0,0,0,0.65); padding: 6px 8px; display: none; text-transform: none; }
+#ui:not([data-state='playing']) .witness { display: none !important; }
+#ui.hud-hidden .witness { display: none !important; }

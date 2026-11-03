@@ -69,7 +69,11 @@ export class Vehicle {
   circleOffsets: number[];
   sirenPhase = Math.random() * 10;
 
+  color: string;
+  get label() { return this.kind; }
+
   constructor(public kind: CarKind, color: string, public col: Collision) {
+    this.color = color;
     this.parts = buildCar(kind, color);
     this.p = { ...PARAMS[kind] };
     this.isCop = kind === 'police' || kind === 'swat';

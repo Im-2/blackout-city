@@ -81,6 +81,8 @@ export class Heist {
     g.audio.loot();
     g.camRig.addShake(0.2);
     this.triggerAlarm('LOOT GRABBED — ALARM!');
+    g.news.report('bank', g.player.pos.x, g.player.pos.z);
+    g.peds.witnessCrime(g.player.pos, 'robbery', 2);
     g.police.minHeat = 1;
   }
 
