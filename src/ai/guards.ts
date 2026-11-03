@@ -24,6 +24,7 @@ interface Guard {
   lookT: number;
   state: AnimState;
   stunT: number;
+  reactT: number;
 }
 
 export class Guards {
@@ -50,7 +51,7 @@ export class Guards {
       const cone = new THREE.Mesh(this.coneGeo, new THREE.MeshBasicMaterial({ color: '#ffd24a', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
       cone.renderOrder = 2;
       this.g.scene.add(cone);
-      this.guards.push({ view, pos: route[0].clone(), heading: 0, route, wp: 1, waitT: 0, cone, sees: false, alert: false, goal: null, lookT: 0, state: 'idle', stunT: 0 });
+      this.guards.push({ view, pos: route[0].clone(), heading: 0, route, wp: 1, waitT: 0, cone, sees: false, alert: false, goal: null, lookT: 0, state: 'idle', stunT: 0, reactT: 0 });
     }
   }
 
@@ -61,7 +62,8 @@ export class Guards {
   }
 
   alertAll(pos: THREE.Vector3) {
-    for (const gd of this.guards) { gd.alert = true; gd.goal = pos.clone(); }
+    // a beat of surprise before they react — gives the player a chance to bolt
+    for (const gd of this.guards) { if (!gd.alert) gd.reactT = 0.9; gd.alert = true; gd.goal = pos.clone(); }
   }
 
   /** distraction: guards investigate a point (if not already chasing) */
@@ -92,10 +94,12 @@ export class Guards {
 
       // movement
       let tx = gd.pos.x, tz = gd.pos.z, speed = 0;
+      if (gd.reactT > 0) { gd.reactT -= dt; gd.heading = dampAngle(gd.heading, Math.atan2(P.x - gd.pos.x, P.z - gd.pos.z), 8, dt); }
       if (gd.stunT > 0) gd.stunT -= dt;
+      else if (gd.reactT > 0) speed = 0;
       else if (gd.alert && gd.goal) {
         tx = gd.goal.x; tz = gd.goal.z;
-        speed = gd.sees ? 5.6 : 3.4;
+        speed = gd.sees ? 5.2 : 3.4;
         if (Math.hypot(tx - gd.pos.x, tz - gd.pos.z) < 1.2) { if (!gd.sees) gd.goal = null; speed = 0; }
       } else if (gd.goal) {
         tx = gd.goal.x; tz = gd.goal.z; speed = 2.6;

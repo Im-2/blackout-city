@@ -42,7 +42,7 @@ export class Player {
 
   spawn(x: number, z: number, heading: number) {
     this.exitVehicle(true);
-    this.pos.set(x, groundHeight(x, z), z);
+    this.pos.set(x, Math.max(groundHeight(x, z), this.g.col.groundUnder(x, z, R, 1.5)), z);
     this.heading = heading;
     this.vx = this.vz = this.vy = 0;
     this.busted = false;

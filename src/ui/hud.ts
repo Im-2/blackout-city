@@ -181,7 +181,7 @@ export class Hud {
         <tr><td>LOOT</td><td>$${s.loot.toLocaleString()}</td></tr>
         <tr><td>HEAT PEAK</td><td>${'★'.repeat(s.heatPeak)}${'☆'.repeat(5 - s.heatPeak)}</td></tr>
         <tr><td>HACKS USED</td><td>${s.hacks}</td></tr>
-        <tr><td>SILENT ENTRY</td><td>${s.alarmBeforeLoot ? 'NO' : 'YES +$50,000'}</td></tr>
+        <tr><td>SILENT ENTRY</td><td>${s.alarmBeforeLoot ? 'NO' : o === 'won' ? 'YES +$50,000' : 'YES'}</td></tr>
         <tr><td>POLICE NOW WATCH</td><td>${learned}</td></tr>
       </table>
       <button class="btn restart">PRESS R TO RESTART</button>`;

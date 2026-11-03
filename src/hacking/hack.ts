@@ -342,7 +342,7 @@ export class HackSystem {
       el.style.transform = `translate(${x | 0}px, ${y | 0}px) translate(-50%, -50%)`;
       el.className = 'hack-icon' + (sel ? ' sel' : '') + (avail ? '' : ' off') + ` k-${c.h.kind}`;
       const extra = sel
-        ? `<div class="hl">${c.h.label}</div><div class="hc">${!avail ? 'OFFLINE' : cd > 0 ? `COOLDOWN ${cd.toFixed(1)}s` : this.energy < info.cost ? 'LOW ENERGY' : `[LMB] HACK · ${info.cost}⚡${c.h.kind === 'signal' ? ' · [RMB] ALL RED' : ''}`}</div>`
+        ? `<div class="hl">${c.h.label}</div><div class="hc">${!avail ? (c.h.kind === 'door' ? 'UNLOCKED' : c.h.kind === 'camera' ? 'BLINDED' : c.h.kind === 'signal' ? 'HACKED' : 'OFFLINE') : cd > 0 ? `COOLDOWN ${cd.toFixed(1)}s` : this.energy < info.cost ? 'LOW ENERGY' : `[LMB] HACK · ${info.cost}⚡${c.h.kind === 'signal' ? ' · [RMB] ALL RED' : ''}`}</div>`
         : '';
       const html = `<div class="ht">${info.tag}</div>${extra}`;
       if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }

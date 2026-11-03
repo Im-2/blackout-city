@@ -324,6 +324,7 @@ export class Police {
     const g = this.g;
     const top = g.routes.topStreets(2);
     if (!top.length) return;
+    this.watched = top.map((t) => t.name);
     const P = g.player.worldPos;
     const n = this.heat >= 3 ? 2 : 1;
     let placed = 0;

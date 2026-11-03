@@ -360,8 +360,12 @@ export class Game {
       this.peds.update(realDt);
       this.env.follow(new THREE.Vector3(-84, 0, -20), this.time);
     } else if (this.state === 'results') {
+      // slow orbit around the scene of the crime
       this.time += realDt * 0.3;
-      this.camRig.update(realDt, this);
+      const P = this.player.worldPos;
+      const a = this.time * 0.4;
+      this.camera.position.set(P.x + Math.cos(a) * 11, P.y + 5, P.z + Math.sin(a) * 11);
+      this.camera.lookAt(P.x, P.y + 1, P.z);
       this.fx.update(realDt * 0.3);
     }
     this.post.render(this.scene, this.camera, realDt, this.time);

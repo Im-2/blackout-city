@@ -86,3 +86,8 @@ assets/                   reference art (not shipped) + optional models/
 - **Route memory persists** in `localStorage` across runs (with decay), so the police "learn" favourite escape routes between attempts. Shown via HUD hints + minimap highlights.
 - **Bank alarm:** cameras/guards spotting you in the restricted zone fill a suspicion meter; full = alarm (heat 2). Grabbing the loot always trips the alarm.
 - GLB models are looked up at `/assets/models/*.glb` (dev serves the folder; the build copies it into `dist`).
+
+## Testing notes
+- The in-app preview pane pauses `requestAnimationFrame` when hidden; loading falls back to timeouts. For scripted tests, call `game.frame()` in a loop from the console (`window.game` is exposed) and dispatch `KeyboardEvent`s on `window`.
+- Perf baseline (mid-chase, heat 3): ~330 draw calls incl. shadows, ~4.7 ms render, ~1.6 ms update.
+- Build: ~215 KB gzipped JS, no asset files.
