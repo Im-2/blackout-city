@@ -307,7 +307,8 @@ export class Police {
   private spawnUnit(mode: Mode, at?: { x: number; z: number; heading: number }, street?: string, near = 75, far = 170, force?: 'swat' | 'moto'): Vehicle | null {
     const g = this.g;
     const swat = force === 'swat' || (this.heat >= 5 && this.units.filter((u) => u.kind === 'swat').length < 2 && this.rng.chance(0.5));
-    const v = new Vehicle(swat ? 'swat' : 'police', '#1c1c1e', g.col);
+    const moto = !swat && !at && (force === 'moto' || (this.heat >= 2 && this.units.filter((u) => u.kind === 'policemoto').length < 2 && this.rng.chance(0.3)));
+    const v = new Vehicle(swat ? 'swat' : moto ? 'policemoto' : 'police', '#1c1c1e', g.col);
     v.driver = 'cop';
     const ai: CopAI = { mode, pts: [], idx: 0, repathT: 0, stuckT: 0, reverseT: 0, sees: false, checkT: 0, deployed: false, officers: [], a: 0, b: 0, c: 0, phase: 'edge', wanderT: 0, street };
     v.ai = ai;

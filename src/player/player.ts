@@ -153,6 +153,7 @@ export class Player {
     this.syncView();
     this.updateFocus();
     if (inp.pressed('KeyE') && !g.hack.active) this.interact();
+    this.updatePick(dt);
   }
 
   private collide() {
@@ -238,13 +239,37 @@ export class Player {
     this.focus = best;
     if (!best) this.focusLabel = '';
     else if ('action' in best) this.focusLabel = best.label;
-    else this.focusLabel = best.isCop ? 'Steal cruiser' : best.driver === 'traffic' ? 'Carjack' : best.isGetaway ? 'Drive getaway car' : 'Get in';
+    else this.focusLabel = best.locked ? `Hold E: pick lock — ${best.label}` : best.isCop ? `Steal ${best.label.toLowerCase()}` : best.driver === 'traffic' ? `Carjack ${best.label.toLowerCase()}` : best.isGetaway ? 'Drive getaway car' : `${best.two ? 'Ride' : 'Drive'} ${best.label.toLowerCase()}`;
+  }
+
+  /** lock-pick progress 0..1 while E is held next to a locked vehicle */
+  pick = 0;
+  private pickTarget: Vehicle | null = null;
+
+  private updatePick(dt: number) {
+    const g = this.g;
+    const t = this.pickTarget;
+    if (!t) return;
+    const near = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z) < 4.2;
+    if (!g.input.isDown('KeyE') || !near || this.speed > 1 || t.driver !== 'none') { this.pickTarget = null; this.pick = 0; return; }
+    this.pick += dt / 1.4;
+    this.heading = Math.atan2(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
+    if (this.pick >= 1) {
+      this.pickTarget = null;
+      this.pick = 0;
+      t.locked = false;
+      g.audio.unlock();
+      g.peds.witnessCrime(this.pos, 'car theft', 1);
+      if (Math.random() < 0.25 && !t.two) { t.alarmT = 8; g.audio.carAlarm(t); g.hud.toast('CAR ALARM!', 'heat'); }
+      this.enterVehicle(t);
+    }
   }
 
   private interact() {
     const f = this.focus;
     if (!f) return;
     if ('action' in f) f.action();
+    else if (f.locked) { this.pickTarget = f; this.pick = 0; }
     else this.enterVehicle(f);
   }
 
@@ -257,10 +282,14 @@ export class Player {
     v.alarmT = 0;
     this.vehicle = v;
     this.vx = this.vz = 0;
+    v.locked = false;
     v.object.add(this.view.root);
-    this.view.root.position.set(0.38, 0.12, -0.3);
+    const d = v.parts.dims;
+    // two-wheelers: rider sits on top (visible); cars: driver seat on the left
+    if (d.two) this.view.root.position.set(0, d.wheelR + d.seatY, d.seatZ);
+    else this.view.root.position.set(d.wid > 2.1 ? 0.55 : 0.38, d.seatY, d.seatZ);
     this.view.root.rotation.set(0, 0, 0);
-    g.audio.door();
+    if (!d.two) g.audio.door();
     g.onEnterVehicle(v);
   }
 
@@ -293,21 +322,33 @@ export class Player {
     this.syncView();
   }
 
+  /** thrown off a bike/scooter on a hard hit */
+  thrownOff(vx: number, vz: number) {
+    if (!this.vehicle) return;
+    this.exitVehicle(true);
+    this.knockT = 1.6;
+    this.vx = vx * 0.6;
+    this.vz = vz * 0.6;
+    this.g.camRig.addShake(0.6);
+    this.g.hud.toast('THROWN OFF!', 'heat');
+  }
+
   private drive(dt: number) {
     const g = this.g;
     const v = this.vehicle!;
     const inp = g.input;
     if (this.busted) {
       v.throttle = 0; v.steer = 0; v.handbrake = true;
-      this.view.update(dt, 'drive', 0);
+      this.view.update(dt, v.two ? 'ride' : 'drive', 0);
       return;
     }
     v.throttle = inp.axis(['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']);
     v.steer = inp.axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
     v.handbrake = inp.isDown('Space');
+    v.boost = inp.isDown('ShiftLeft', 'ShiftRight');
     this.pos.copy(v.pos);
     this.heading = v.heading;
-    this.view.update(dt, 'drive', 0);
+    this.view.update(dt, v.two ? 'ride' : 'drive', Math.abs(v.speed));
     if (inp.pressed('KeyE') && !g.hack.active) this.exitVehicle();
     void clamp;
   }

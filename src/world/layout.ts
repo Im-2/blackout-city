@@ -49,6 +49,29 @@ export function groundHeight(x: number, z: number) {
   return isRoad(x, z) ? 0 : CURB_H;
 }
 
+/** Walkable/drivable platforms (parking decks, ramps, rooftops, station floors). */
+export interface Surface {
+  x0: number; z0: number; x1: number; z1: number;
+  /** flat height, or a ramp from h0 at the start edge to h1 at the end edge along `axis` */
+  h0: number; h1?: number; axis?: 'x' | 'z';
+}
+export const surfaces: Surface[] = [];
+
+/** Highest surface under (x,z) that is not above curY + step (so you can drive under decks). */
+export function surfaceHeight(x: number, z: number, curY = 0, step = 0.7) {
+  let best = groundHeight(x, z);
+  for (const s of surfaces) {
+    if (x < s.x0 || x > s.x1 || z < s.z0 || z > s.z1) continue;
+    let h = s.h0;
+    if (s.h1 !== undefined) {
+      const t = s.axis === 'x' ? (x - s.x0) / (s.x1 - s.x0) : (z - s.z0) / (s.z1 - s.z0);
+      h = s.h0 + (s.h1 - s.h0) * t;
+    }
+    if (h <= curY + step && h > best) best = h;
+  }
+  return best;
+}
+
 // Street names (original, generic).
 export const AVENUES = ['Quarry Ave', '2nd Ave', 'Kettle Ave', 'Main Ave', 'Lantern Ave', '6th Ave', 'Harbor Ave'];
 export const STREETS = ['Rail St', 'Foundry St', 'Bank St', 'Union Blvd', 'Canal St', 'Mill St', 'Dock St'];

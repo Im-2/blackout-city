@@ -1,6 +1,15 @@
 // Clip/debug tools for recording footage. Always on (documented on the controls screen).
 import type { Game } from '../core/game';
 import { blockCenter } from '../world/layout';
+import { Vehicle } from '../vehicles/vehicle';
+import { DIMS, CarKind } from '../vehicles/carMesh';
+import { colorFor } from '../ai/traffic';
+import { Rng } from '../core/math';
+
+const ALL_KINDS = Object.keys(DIMS) as CarKind[];
+let cycleI = 0;
+let tpI = -1;
+const rng = new Rng(9);
 
 export function updateDebug(g: Game) {
   const inp = g.input;
@@ -20,6 +29,34 @@ export function updateDebug(g: Game) {
     g.police.minHeat = 1;
     g.hud.toast('DEBUG: LOOT IN HAND', 'dim');
   }
+  if (inp.pressed('KeyB')) spawnBeside(g, 'bicycle');
+  if (inp.pressed('KeyN')) spawnBeside(g, 'motorbike');
+  if (inp.pressed('KeyV')) { spawnBeside(g, ALL_KINDS[cycleI % ALL_KINDS.length]); cycleI++; }
+  if (inp.pressed('KeyK')) {
+    const P = g.player.worldPos;
+    g.peds.spawnCrowd(P.x, P.z, 30);
+    g.hud.toast('DEBUG: CROWD', 'dim');
+  }
+  // teleport through the enterable buildings
+  const sites = g.sites();
+  if (sites.length && (inp.pressed('BracketRight') || inp.pressed('BracketLeft'))) {
+    tpI = (tpI + (inp.pressed('BracketRight') ? 1 : -1) + sites.length) % sites.length;
+    const s = sites[tpI];
+    teleport(g, s.x, s.z, s.heading, s.name.toUpperCase());
+  }
+}
+
+function spawnBeside(g: Game, kind: CarKind) {
+  const p = g.player;
+  const base = p.vehicle ? p.vehicle.pos : p.pos;
+  const heading = p.vehicle ? p.vehicle.heading : p.heading;
+  const v = new Vehicle(kind, colorFor(rng, kind), g.col);
+  const rx = Math.cos(heading), rz = -Math.sin(heading);
+  const off = 2.2 + v.parts.dims.wid / 2;
+  v.place(base.x + rx * off, base.z + rz * off, heading);
+  v.handbrake = true;
+  g.addVehicle(v);
+  g.hud.toast(`DEBUG: ${v.label.toUpperCase()}`, 'dim');
 }
 
 function teleport(g: Game, x: number, z: number, heading: number, label: string) {

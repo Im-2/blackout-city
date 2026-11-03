@@ -14,7 +14,7 @@ import { Player, Interactable } from '../player/player';
 import { CameraRig } from '../player/camera';
 import { Vehicle, collideVehicles, ImpactEvent } from '../vehicles/vehicle';
 import { Skids } from '../vehicles/skids';
-import { Traffic } from '../ai/traffic';
+import { Traffic, pickKind, districtAt, colorFor } from '../ai/traffic';
 import { Police } from '../ai/police';
 import { RouteMemory } from '../ai/routeMemory';
 import { Pedestrians } from '../ai/pedestrians';
@@ -231,9 +231,11 @@ export class Game {
     // parked cars along curbs
     const spots = [...this.city.parking].sort(() => this.rng.next() - 0.5).slice(0, 22);
     for (const s of spots) {
-      const v = new Vehicle(this.rng.chance(0.12) ? 'taxi' : 'sedan', this.rng.pick(PAL.carColors), this.col);
+      const kind = pickKind(this.rng, districtAt(s.x, s.z));
+      const v = new Vehicle(kind === 'bus' ? 'sedan' : kind, colorFor(this.rng, kind), this.col);
       v.place(s.x, s.z, s.heading);
       v.parked = true;
+      v.locked = kind !== 'bicycle';
       v.handbrake = true;
       this.addVehicle(v);
       this.parked.push(v);
@@ -296,6 +298,14 @@ export class Game {
     ga.place(base.x + rx * 3.2, base.z + rz * 3.2, heading);
     ga.hp = 100;
     ga.wrecked = false;
+  }
+
+  /** places the clip keys [ and ] teleport between */
+  sites(): { name: string; x: number; z: number; heading: number }[] {
+    return [
+      { name: 'Bank', x: this.bank.playerStart.x, z: this.bank.playerStart.z, heading: Math.PI },
+      { name: 'Old Garage drop', x: this.city.dropZone.doorX - 18, z: this.city.dropZone.doorZ, heading: Math.PI / 2 },
+    ];
   }
 
   isVisible(x: number, y: number, z: number) {
@@ -486,6 +496,7 @@ export class Game {
       if (big) { this.fx.spawn('debris', p, 8, new THREE.Vector3(e.nx, 0, e.nz), 0.6); this.fx.spawn('glass', p, 6); }
       this.audio.crash(e.impact, p);
       const involvesPlayer = e.v === pv || e.other === pv;
+      if (involvesPlayer && pv && pv.two && e.impact > 8.5) this.player.thrownOff(pv.vx, pv.vz);
       if (involvesPlayer) {
         this.camRig.addShake(Math.min(0.7, e.impact / 22));
         if (big) { this.post.triggerFlash('#ffffff', 0.12); this.hitstop(0.04); }

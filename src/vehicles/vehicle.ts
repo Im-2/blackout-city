@@ -1,9 +1,9 @@
 // Arcade car physics: bicycle-ish yaw model with lateral grip, handbrake
 // drift, collision vs AABBs (3 circles), damage, lights.
 import * as THREE from 'three';
-import { buildCar, CarKind, CarParts } from './carMesh';
+import { buildCar, CarKind, CarParts, LABELS, repaint } from './carMesh';
 import { clamp, damp } from '../core/math';
-import { groundHeight } from '../world/layout';
+import { surfaceHeight } from '../world/layout';
 import type { Collision } from '../world/collision';
 
 export interface CarParams {
@@ -17,12 +17,29 @@ export interface CarParams {
   mass: number;
 }
 
-const PARAMS: Record<CarKind, CarParams> = {
-  sedan: { maxSpeed: 31, accel: 13, brake: 30, reverse: 9, grip: 9, driftGrip: 1.4, steerRate: 2.3, mass: 1 },
-  taxi: { maxSpeed: 31, accel: 13, brake: 30, reverse: 9, grip: 9, driftGrip: 1.4, steerRate: 2.3, mass: 1 },
-  police: { maxSpeed: 35, accel: 16, brake: 34, reverse: 10, grip: 10, driftGrip: 1.6, steerRate: 2.5, mass: 1.25 },
-  swat: { maxSpeed: 28, accel: 11, brake: 26, reverse: 8, grip: 8, driftGrip: 1.5, steerRate: 1.9, mass: 2.6 },
-  van: { maxSpeed: 25, accel: 9, brake: 24, reverse: 7, grip: 8, driftGrip: 1.5, steerRate: 1.9, mass: 1.8 },
+const P = (maxSpeed: number, accel: number, brake: number, grip: number, driftGrip: number, steerRate: number, mass: number, reverse = 8): CarParams => ({ maxSpeed, accel, brake, reverse, grip, driftGrip, steerRate, mass });
+// per-vehicle tuning: top speed m/s, accel, brake, grip, handbrake grip, steer rate, mass
+export const PARAMS: Record<CarKind, CarParams> = {
+  bicycle: P(10.5, 6, 14, 14, 4, 3.4, 0.25, 2),
+  scooter: P(17, 9, 20, 13, 3.5, 3.2, 0.35, 3),
+  motorbike: P(40, 21, 30, 12, 2.5, 3.0, 0.45, 4),
+  policemoto: P(41, 21, 30, 12, 2.5, 3.0, 0.5, 4),
+  sedan: P(31, 13, 30, 9, 1.4, 2.3, 1),
+  taxi: P(31, 13, 30, 9, 1.4, 2.3, 1),
+  hatchback: P(28, 14, 30, 9.5, 1.5, 2.5, 0.85),
+  sports: P(44, 21, 36, 11, 1.7, 2.5, 1.0),
+  muscle: P(42, 22, 30, 8, 1.1, 2.2, 1.25),
+  pickup: P(30, 13, 28, 8, 1.3, 2.0, 1.5),
+  suv: P(31, 14, 28, 8.5, 1.4, 2.1, 1.6),
+  police: P(36, 17, 34, 10, 1.6, 2.5, 1.25, 10),
+  van: P(25, 9, 24, 8, 1.5, 1.9, 1.8),
+  foodtruck: P(22, 7, 22, 7.5, 1.5, 1.7, 2.2),
+  boxtruck: P(23, 7, 22, 7, 1.4, 1.6, 2.8),
+  garbage: P(20, 6, 20, 7, 1.4, 1.5, 3.2),
+  bus: P(21, 6, 20, 7, 1.4, 1.3, 3.6),
+  ambulance: P(32, 13, 28, 8.5, 1.5, 2.0, 1.9),
+  firetruck: P(27, 9, 24, 7.5, 1.4, 1.5, 3.4),
+  swat: P(29, 12, 26, 8, 1.5, 1.9, 2.6),
 };
 
 export type Driver = 'none' | 'player' | 'traffic' | 'cop';
@@ -70,17 +87,35 @@ export class Vehicle {
   sirenPhase = Math.random() * 10;
 
   color: string;
-  get label() { return this.kind; }
+  get label() { return LABELS[this.kind]; }
+  two: boolean;
+  /** parked vehicles need a lock-pick (hold E) or a quiet hack */
+  locked = false;
+  boost = false;
+  isEmergency: boolean;
+  private lean = 0;
 
   constructor(public kind: CarKind, color: string, public col: Collision) {
     this.color = color;
     this.parts = buildCar(kind, color);
     this.p = { ...PARAMS[kind] };
-    this.isCop = kind === 'police' || kind === 'swat';
-    this.radius = this.parts.dims.wid / 2;
-    const half = this.parts.dims.len / 2 - this.radius;
-    this.circleOffsets = [-half, 0, half];
+    this.isCop = kind === 'police' || kind === 'swat' || kind === 'policemoto';
+    this.isEmergency = this.isCop || kind === 'ambulance' || kind === 'firetruck';
+    this.two = this.parts.dims.two;
+    const d = this.parts.dims;
+    this.radius = this.two ? 0.42 : d.wid / 2;
+    if (this.two) this.circleOffsets = [-d.len / 2 + 0.45, d.len / 2 - 0.45];
+    else {
+      const half = d.len / 2 - this.radius;
+      const n = Math.max(2, Math.round((2 * half) / (this.radius * 1.6)) + 1);
+      this.circleOffsets = Array.from({ length: n }, (_, i) => -half + (2 * half * i) / (n - 1));
+    }
     this.grip = this.p.grip;
+  }
+
+  respray(color: string) {
+    this.color = color;
+    repaint(this.parts, this.kind, color);
   }
 
   get object() {
@@ -98,7 +133,7 @@ export class Vehicle {
   }
 
   place(x: number, z: number, heading: number) {
-    this.pos.set(x, groundHeight(x, z), z);
+    this.pos.set(x, surfaceHeight(x, z, 0.2), z);
     this.heading = heading;
     this.vx = this.vz = this.yawRate = this.spin = 0;
     this.sync();
@@ -122,9 +157,11 @@ export class Vehicle {
 
     // longitudinal
     let a = 0;
+    const boost = this.boost && thr > 0 && (this.two || this.kind === 'sports' || this.kind === 'muscle') && this.kind !== 'bicycle';
+    const maxS = p.maxSpeed * (boost ? 1.15 : 1);
     if (thr > 0) {
       if (vf < -0.8) { a = p.brake * thr; braking = true; }
-      else a = p.accel * thr * (1 - Math.pow(clamp(vf / p.maxSpeed, 0, 1), 2));
+      else a = p.accel * (boost ? 1.5 : 1) * thr * (1 - Math.pow(clamp(vf / maxS, 0, 1), 2));
     } else if (thr < 0) {
       if (vf > 0.8) { a = p.brake * thr; braking = true; }
       else a = vf > -p.reverse ? p.accel * 0.7 * thr : 0;
@@ -133,10 +170,10 @@ export class Vehicle {
     const coast = thr === 0 ? 0.45 : 0.08;
     vf -= vf * coast * dt;
     if (Math.abs(vf) < 0.05 && thr === 0) vf = 0;
-    if (hb) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 7 * dt);
+    if (hb) vf -= Math.sign(vf) * Math.min(Math.abs(vf), (this.two ? 18 : 7) * dt);
 
     // lateral grip (smooth recovery after a drift)
-    const tgtGrip = hb ? p.driftGrip : p.grip * (1 - 0.3 * clamp(Math.abs(vf) / p.maxSpeed, 0, 1) * Math.abs(steer));
+    const tgtGrip = hb && !this.two ? p.driftGrip : p.grip * (1 - 0.3 * clamp(Math.abs(vf) / p.maxSpeed, 0, 1) * Math.abs(steer));
     this.grip = tgtGrip < this.grip ? damp(this.grip, tgtGrip, 14, dt) : damp(this.grip, tgtGrip, 2.2, dt);
     if (this.wrecked) this.grip = 6;
     vs *= Math.exp(-this.grip * dt);
@@ -156,7 +193,8 @@ export class Vehicle {
 
     this.pos.x += this.vx * dt;
     this.pos.z += this.vz * dt;
-    this.pos.y = damp(this.pos.y, groundHeight(this.pos.x, this.pos.z), 14, dt);
+    const gy = surfaceHeight(this.pos.x, this.pos.z, this.pos.y);
+    this.pos.y = gy > this.pos.y ? damp(this.pos.y, gy, 18, dt) : Math.max(gy, this.pos.y - 9 * dt);
 
     this.speed = vf;
     this.slip = Math.abs(vs);
@@ -167,8 +205,15 @@ export class Vehicle {
     this.collideStatic(impacts);
 
     // visuals
-    this.roll = damp(this.roll, clamp(-vs * 0.025 - this.yawRate * sp * 0.006, -0.12, 0.12), 6, dt);
-    this.pitch = damp(this.pitch, clamp(-a * 0.004, -0.06, 0.06), 6, dt);
+    if (this.two) {
+      // lean into turns, wheelie on boost
+      this.lean = damp(this.lean, clamp(this.yawRate * sp * 0.045, -0.65, 0.65), 7, dt);
+      this.roll = this.lean;
+      this.pitch = damp(this.pitch, boost && sp < 22 && this.kind !== 'scooter' ? -0.42 : clamp(-a * 0.006, -0.08, 0.08), 5, dt);
+    } else {
+      this.roll = damp(this.roll, clamp(-vs * 0.025 - this.yawRate * sp * 0.006, -0.12, 0.12), 6, dt);
+      this.pitch = damp(this.pitch, clamp(-a * 0.004, -0.06, 0.06), 6, dt);
+    }
     this.wheelRot += (vf * dt) / this.parts.dims.wheelR;
     this.steerVis = damp(this.steerVis, -steer * 0.5, 12, dt);
     if (this.alarmT > 0) this.alarmT -= dt;
@@ -183,7 +228,7 @@ export class Vehicle {
       c.x = this.pos.x + fx * off;
       c.z = this.pos.z + fz * off;
       const ox = c.x, oz = c.z;
-      const res = this.col.resolveCircle(c, this.radius, this.pos.y, 0.5, this.pos.y + 1.6);
+      const res = this.col.resolveCircle(c, this.radius, this.pos.y, 0.5, this.pos.y + Math.min(1.6, this.parts.dims.h));
       if (!res.hits) continue;
       this.pos.x += c.x - ox;
       this.pos.z += c.z - oz;
@@ -219,17 +264,22 @@ export class Vehicle {
     const r = this.parts.root;
     r.position.copy(this.pos);
     r.rotation.y = this.heading;
+    // wheelie lifts the front around the rear axle
+    const back = this.two ? this.parts.dims.wheelBase / 2 : 0;
     this.parts.body.rotation.set(this.pitch, 0, this.roll);
+    this.parts.body.position.set(0, this.two ? Math.sin(-Math.min(0, this.pitch)) * back : 0, 0);
     const w = this.parts.wheels;
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < w.length; i++) {
       const wheel = w[i];
-      wheel.rotation.y = i < 2 ? this.steerVis : 0;
+      wheel.rotation.y = i < (this.two ? 1 : 2) ? this.steerVis : 0;
+      wheel.rotation.z = this.two ? -this.roll : 0;
       wheel.children[0].rotation.x = this.wheelRot;
     }
+    if (this.two && w[0]) w[0].position.y = this.parts.dims.wheelR + this.parts.body.position.y * 2;
     const bm = this.parts.brake.material as THREE.MeshBasicMaterial;
     bm.color.set(braking ? '#ff3a2a' : this.driver === 'none' && !this.isCop ? '#5a1410' : '#b8231c');
     const alarmOn = this.alarmT > 0 && Math.sin(this.alarmT * 14) > 0;
-    this.parts.head.visible = this.driver !== 'none' || alarmOn || this.isCop;
+    this.parts.head.visible = this.driver !== 'none' || alarmOn || this.isCop || this.isEmergency;
     if (alarmOn) bm.color.set('#ff8a40');
     if (this.parts.red && this.parts.blue) {
       const on = this.siren;

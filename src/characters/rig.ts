@@ -532,10 +532,12 @@ export class RigCharacter implements CharacterView {
         break;
       }
       case 'ride': {
-        this.set(B.thL, -1.2, 0.15);
-        this.set(B.thR, -1.2, -0.15);
-        this.set(B.shL, 1.0);
-        this.set(B.shR, 1.0);
+        this.phase += dt * Math.min(speed, 10) * 0.9;
+        const pd = speed > 0.5 ? s(this.phase) * 0.35 : 0;
+        this.set(B.thL, -1.2 + pd, 0.15);
+        this.set(B.thR, -1.2 - pd, -0.15);
+        this.set(B.shL, 1.0 - pd);
+        this.set(B.shR, 1.0 + pd);
         this.set(B.uaL, -1.1, 0, 0.25);
         this.set(B.uaR, -1.1, 0, -0.25);
         this.set(B.faL, -0.3);

@@ -26,7 +26,7 @@ export const HACK_INFO: Record<HackKind, { cost: number; cd: number; tag: string
   door: { cost: 25, cd: 2, tag: 'DOOR', name: 'Door' },
   lamp: { cost: 8, cd: 0.6, tag: 'LMP', name: 'Street lamp' },
   power: { cost: 40, cd: 8, tag: 'PWR', name: 'Power box' },
-  alarm: { cost: 12, cd: 2, tag: 'ALM', name: 'Car alarm' },
+  alarm: { cost: 12, cd: 2, tag: 'CAR', name: 'Parked vehicle' },
   cell: { cost: 20, cd: 4, tag: 'CELL', name: 'Cell tower' },
 };
 
@@ -216,10 +216,16 @@ export class HackSystem {
     let h = this.carHackables.get(v);
     if (!h) {
       h = {
-        kind: 'alarm', label: 'Car alarm', pos: v.pos, size: new THREE.Vector3(2.2, 1.7, 4.6), range: 40, ref: v,
+        kind: 'alarm', label: v.label, pos: v.pos, size: new THREE.Vector3(v.parts.dims.wid + 0.3, v.parts.dims.h + 0.1, v.parts.dims.len + 0.2), range: 40, ref: v,
         available: () => v.alarmT <= 0 && v.driver === 'none' && !v.wrecked,
-        act: () => {
+        act: (alt) => {
           const g = this.g;
+          if (!alt && v.locked) {
+            // quiet unlock: no lock-pick, no witnesses
+            v.locked = false;
+            g.audio.unlock();
+            return `${v.label.toUpperCase()} UNLOCKED QUIETLY`;
+          }
           v.alarmT = 12;
           g.peds.lure(v.pos.clone(), 45);
           g.police.lure(v.pos.clone());
@@ -356,7 +362,7 @@ export class HackSystem {
       el.style.transform = `translate(${x | 0}px, ${y | 0}px) translate(-50%, -50%)`;
       el.className = 'hack-icon' + (sel ? ' sel' : '') + (avail ? '' : ' off') + ` k-${c.h.kind}`;
       const extra = sel
-        ? `<div class="hl">${c.h.label}</div><div class="hc">${!avail ? (c.h.kind === 'door' ? 'UNLOCKED' : c.h.kind === 'camera' ? 'BLINDED' : c.h.kind === 'signal' ? 'HACKED' : 'OFFLINE') : cd > 0 ? `COOLDOWN ${cd.toFixed(1)}s` : this.energy < info.cost ? 'LOW ENERGY' : `[LMB] HACK · ${info.cost}⚡${c.h.kind === 'signal' ? ' · [RMB] ALL RED' : ''}`}</div>`
+        ? `<div class="hl">${c.h.label}</div><div class="hc">${!avail ? (c.h.kind === 'door' ? 'UNLOCKED' : c.h.kind === 'camera' ? 'BLINDED' : c.h.kind === 'signal' ? 'HACKED' : 'OFFLINE') : cd > 0 ? `COOLDOWN ${cd.toFixed(1)}s` : this.energy < info.cost ? 'LOW ENERGY' : `[LMB] HACK · ${info.cost}⚡${c.h.kind === 'signal' ? ' · [RMB] ALL RED' : ''}${c.h.kind === 'alarm' ? ((c.h.ref as Vehicle).locked ? ' UNLOCK · [RMB] ALARM' : ' ALARM') : ''}`}</div>`
         : '';
       const html = `<div class="ht">${info.tag}</div>${extra}`;
       if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }

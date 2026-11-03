@@ -331,8 +331,9 @@ export class City {
     const r = this.rng;
     const splitX = r.chance(0.7), splitZ = r.chance(0.7);
     const mx = (lot.x0 + lot.x1) / 2 + r.range(-4, 4), mz = (lot.z0 + lot.z1) / 2 + r.range(-4, 4);
-    const xs = splitX ? [[lot.x0, mx - 0.5], [mx + 0.5, lot.x1]] : [[lot.x0, lot.x1]];
-    const zs = splitZ ? [[lot.z0, mz - 0.5], [mz + 0.5, lot.z1]] : [[lot.z0, lot.z1]];
+    // 1.5 m gaps: alleys bikes can squeeze through but cars can't
+    const xs = splitX ? [[lot.x0, mx - 0.75], [mx + 0.75, lot.x1]] : [[lot.x0, lot.x1]];
+    const zs = splitZ ? [[lot.z0, mz - 0.75], [mz + 0.75, lot.z1]] : [[lot.z0, lot.z1]];
     for (const [x0, x1] of xs)
       for (const [z0, z1] of zs) {
         const style = this.pickStyle(central);

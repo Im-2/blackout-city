@@ -241,7 +241,7 @@ export class Hud {
     }
 
     // prompt
-    const label = g.hack.active ? '' : p.focusLabel;
+    const label = g.hack.active ? '' : p.pick > 0 ? `PICKING LOCK ${'█'.repeat(Math.round(p.pick * 10))}${'░'.repeat(10 - Math.round(p.pick * 10))}` : p.focusLabel;
     this.prompt.textContent = label ? `[E] ${label}` : v && v.speedAbs < 6 ? '' : '';
     this.prompt.style.display = label ? 'block' : 'none';
 
