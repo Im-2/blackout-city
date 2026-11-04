@@ -104,6 +104,7 @@ export class Player {
   update(dt: number) {
     const g = this.g;
     const inp = g.input;
+    if (g.travel.open) { this.view.update(dt, 'idle', 0); return; }
     if (this.hidden) {
       if (inp.pressed('KeyE') || inp.pressed('Space')) { this.hidden = false; this.view.root.visible = true; }
       return;

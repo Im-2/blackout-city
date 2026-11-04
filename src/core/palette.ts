@@ -42,6 +42,8 @@ export const PAL = {
   signal: '#b38b25',
   lamp: '#ffd88a',
 
+  water: '#2c4552',
+  waterDark: '#22363f',
   sirenRed: '#e0322a',
   sirenBlue: '#2b5ce0',
   cyan: '#46e6ff',

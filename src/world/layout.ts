@@ -1,11 +1,11 @@
 // City grid constants, road graph and street naming. Pure data, no rendering.
 
-export const BLOCKS = 6;
+export const BLOCKS = 12;
 export const PITCH = 56;
 export const ROAD_HALF = 7;
 export const SIDEWALK = 4;
 export const CURB_H = 0.15;
-export const HALF = (BLOCKS * PITCH) / 2; // 168
+export const HALF = (BLOCKS * PITCH) / 2; // 336
 export const LANE = 2.2; // traffic lane centre offset from road centre
 export const PARK_LANE = 5.6;
 
@@ -74,8 +74,12 @@ export function surfaceHeight(x: number, z: number, curY = 0, step = 0.7) {
 }
 
 // Street names (original, generic).
-export const AVENUES = ['Quarry Ave', '2nd Ave', 'Kettle Ave', 'Main Ave', 'Lantern Ave', '6th Ave', 'Harbor Ave'];
-export const STREETS = ['Rail St', 'Foundry St', 'Bank St', 'Union Blvd', 'Canal St', 'Mill St', 'Dock St'];
+export const RING = 'Ring Hwy';
+export const AVENUES = [RING, 'Birch Ave', 'Cooper Ave', 'Quarry Ave', '2nd Ave', 'Kettle Ave', 'Main Ave', 'Lantern Ave', '6th Ave', 'Harbor Ave', 'Pier Ave', 'Gantry Ave', RING];
+export const STREETS = [RING, 'Elm St', 'Orchard St', 'Rail St', 'Foundry St', 'Bank St', 'Union Blvd', 'Canal St', 'Mill St', 'Dock St', 'Marina St', 'Shore Rd', RING];
+
+/** node the overpass flies over */
+export const OVERPASS = { i: 10, j: 4 };
 
 // ---- Road graph -----------------------------------------------------------
 export interface RNode {
@@ -108,18 +112,22 @@ export class RoadGraph {
     for (let j = 0; j < N; j++)
       for (let i = 0; i < N; i++)
         this.nodes.push({ id: j * N + i, i, j, x: roadCoord(i), z: roadCoord(j), edges: [], hasLight: false });
-    const link = (a: number, b: number, axis: 'x' | 'z', name: string) => {
-      const e: REdge = { id: this.edges.length, a, b, axis, name, len: PITCH };
+    const link = (a: number, b: number, axis: 'x' | 'z', name: string, len = PITCH) => {
+      const e: REdge = { id: this.edges.length, a, b, axis, name, len };
       this.edges.push(e);
       this.nodes[a].edges.push(e.id);
       this.nodes[b].edges.push(e.id);
     };
     for (let j = 0; j < N; j++)
       for (let i = 0; i < N; i++) {
+        // the overpass: Foundry St flies over Pier Ave without a junction
+        if (j === OVERPASS.j && i === OVERPASS.i - 1) { link(j * N + i, j * N + i + 2, 'x', STREETS[j], PITCH * 2); continue; }
+        if (j === OVERPASS.j && i === OVERPASS.i) { if (j < N - 1) link(j * N + i, (j + 1) * N + i, 'z', AVENUES[i]); continue; }
         if (i < N - 1) link(j * N + i, j * N + i + 1, 'x', STREETS[j]);
         if (j < N - 1) link(j * N + i, (j + 1) * N + i, 'z', AVENUES[i]);
       }
-    for (const n of this.nodes) n.hasLight = n.edges.length >= 3;
+    // no lights on the highway ring
+    for (const n of this.nodes) n.hasLight = n.edges.length >= 3 && n.i > 0 && n.j > 0 && n.i < BLOCKS && n.j < BLOCKS;
   }
 
   node(i: number, j: number) {
@@ -198,5 +206,7 @@ export function lanePoint(ax: number, az: number, bx: number, bz: number, t: num
 }
 
 // Key locations
-export const BANK_BLOCK: [number, number] = [1, 2];
-export const DROP_BLOCK: [number, number] = [5, 5];
+export const BANK_BLOCK: [number, number] = [4, 5];
+export const DROP_BLOCK: [number, number] = [8, 8];
+/** waterline on the south and east sides of the map */
+export const SHORE = HALF + ROAD_HALF + 2;

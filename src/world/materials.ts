@@ -30,15 +30,15 @@ let cached: WorldMats | null = null;
 
 function facade(style: T.FacadeStyle): FacadeMats {
   const f = T.texFacade(style);
-  const lit = worldMat({ map: f.map, emissiveMap: f.emissive, emissive: new THREE.Color(PAL.windowLit), emissiveIntensity: 0.85 });
-  const dark = worldMat({ map: f.map, emissive: 0x000000 });
+  const lit = worldMat({ map: f.map, emissiveMap: f.emissive, emissive: new THREE.Color(PAL.windowLit), emissiveIntensity: 0.85, vertexColors: true });
+  const dark = worldMat({ map: f.map, emissive: 0x000000, vertexColors: true });
   return { lit, dark, tile: f.tile };
 }
 
 function plinth(hex: string, dark: string): FacadeMats {
   const f = T.texPlinth(hex, dark);
-  const lit = worldMat({ map: f.map, emissiveMap: f.emissive, emissive: new THREE.Color(PAL.windowLit), emissiveIntensity: 0.9 });
-  const darkM = worldMat({ map: f.map, emissive: 0x000000 });
+  const lit = worldMat({ map: f.map, emissiveMap: f.emissive, emissive: new THREE.Color(PAL.windowLit), emissiveIntensity: 0.9, vertexColors: true });
+  const darkM = worldMat({ map: f.map, emissive: 0x000000, vertexColors: true });
   return { lit, dark: darkM, tile: f.tile };
 }
 
@@ -63,7 +63,7 @@ export function worldMaterials(): WorldMats {
     },
     roof: worldMat({ map: T.texRoof() }),
     asphalt: worldMat({ map: T.texAsphalt() }),
-    sidewalk: worldMat({ map: T.texSidewalk() }),
+    sidewalk: worldMat({ map: T.texSidewalk(), vertexColors: true }),
     props: worldMat({ map: T.texNoise(), vertexColors: true }),
     foliage: worldMat({ map: T.texFoliage(), vertexColors: true }),
     glow: basicMat({ vertexColors: true, fog: true }),

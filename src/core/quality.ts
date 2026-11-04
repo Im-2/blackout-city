@@ -10,13 +10,14 @@ export interface QualityPreset {
   pixelRatio: number; // cap
   ambient: number; // pigeons/litter density multiplier
   msaa: number; // render target samples
+  view: number; // world streaming radius + fog distance (m)
 }
 
 export const PRESETS: QualityPreset[] = [
-  { name: 'LOW', traffic: 12, peds: 90, rigs: 12, shadow: 1024, pixelRatio: 0.85, ambient: 0.4, msaa: 0 },
-  { name: 'MEDIUM', traffic: 18, peds: 140, rigs: 20, shadow: 1024, pixelRatio: 1, ambient: 0.7, msaa: 2 },
-  { name: 'HIGH', traffic: 26, peds: 190, rigs: 30, shadow: 2048, pixelRatio: 1.25, ambient: 1, msaa: 4 },
-  { name: 'ULTRA', traffic: 32, peds: 230, rigs: 40, shadow: 2048, pixelRatio: 1.5, ambient: 1, msaa: 4 },
+  { name: 'LOW', traffic: 12, peds: 90, rigs: 12, shadow: 1024, pixelRatio: 0.85, ambient: 0.4, msaa: 0, view: 165 },
+  { name: 'MEDIUM', traffic: 18, peds: 140, rigs: 20, shadow: 1024, pixelRatio: 1, ambient: 0.7, msaa: 2, view: 195 },
+  { name: 'HIGH', traffic: 26, peds: 190, rigs: 30, shadow: 2048, pixelRatio: 1.25, ambient: 1, msaa: 4, view: 230 },
+  { name: 'ULTRA', traffic: 32, peds: 230, rigs: 40, shadow: 2048, pixelRatio: 1.5, ambient: 1, msaa: 4, view: 265 },
 ];
 
 const BUDGET_MS = 1000 / 60;

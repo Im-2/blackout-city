@@ -62,7 +62,7 @@ export class WorldTime {
   private buildMarket() {
     const g = this.g;
     const G = g.city.graph;
-    const e = G.edges.find((x) => x.name === 'Mill St' && G.nodes[x.a].i === 2) ?? G.edges[0];
+    const e = G.edges.find((x) => x.name === 'Mill St' && G.nodes[x.a].i === 5) ?? G.edges[0];
     this.eventEdge = e.id;
     e.closed = true;
     const A = G.nodes[e.a], B = G.nodes[e.b];
@@ -107,7 +107,8 @@ export class WorldTime {
     env.hemi.intensity = lerp(0.45, this.base.hemi, day) * (1 - this.rain * 0.25);
     const fogC = new THREE.Color(PAL.haze).lerp(new THREE.Color('#1a2230'), 1 - day).lerp(new THREE.Color('#5a6068'), this.rain * 0.5);
     (g.scene.fog as THREE.Fog).color.copy(fogC);
-    (g.scene.fog as THREE.Fog).far = lerp(270, 170, this.rain);
+    const view = g.quality.p.view;
+    (g.scene.fog as THREE.Fog).far = lerp(view, view * 0.65, this.rain);
     (g.scene.background as THREE.Color).copy(fogC);
     const skyU = (env.sky.material as THREE.ShaderMaterial).uniforms;
     skyU.top.value.copy(this.sky.set(PAL.skyTop).lerp(new THREE.Color('#0e1420'), 1 - day));

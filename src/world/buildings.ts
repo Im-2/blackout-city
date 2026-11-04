@@ -49,12 +49,12 @@ export interface Ladder { x: number; z: number; top: number; heading: number; to
 export interface Zipline { a: THREE.Vector3; b: THREE.Vector3; name: string; }
 
 const RESERVED: Record<string, [number, number]> = {
-  shops: [2, 3],
-  police: [4, 3],
-  garage: [3, 4],
-  tower: [3, 3],
-  warehouse: [5, 4],
-  arcade: [0, 3],
+  shops: [5, 6],
+  police: [7, 6],
+  garage: [6, 7],
+  tower: [6, 6],
+  warehouse: [8, 7],
+  arcade: [3, 6],
 };
 
 export class Buildings {
@@ -678,7 +678,7 @@ export class Buildings {
     add(99.4, 30, 7.0, Math.PI / 2);
     add(-11.6, 20, 5.2, Math.PI / 2);
     // a handful of generated buildings get fire escapes on their street faces
-    const picks = this.g.city.footprints.filter((f) => f.top < 30 && f.top > 6).sort(() => this.rng.next() - 0.5).slice(0, 10);
+    const picks = this.g.city.footprints.filter((f) => f.top < 30 && f.top > 6).sort(() => this.rng.next() - 0.5).slice(0, 26);
     for (const f of picks) {
       const opts: [number, number, number][] = [[(f.x0 + f.x1) / 2, f.z0 - 0.15, Math.PI], [(f.x0 + f.x1) / 2, f.z1 + 0.15, 0], [f.x0 - 0.15, (f.z0 + f.z1) / 2, -Math.PI / 2], [f.x1 + 0.15, (f.z0 + f.z1) / 2, Math.PI / 2]];
       const [x, z, h] = opts[this.rng.int(0, 3)];

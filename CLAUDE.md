@@ -23,10 +23,11 @@ tight, great-feeling, good-looking slice beats a big empty map.
 
 ## Units & world layout
 - 1 unit = 1 metre. Y up. Characters face +Z at rest; yaw 0 = facing +Z; forward = (sin yaw, cos yaw).
-- 6×6 blocks, pitch 56 m, roads 14 m (2 lanes each way, right-hand traffic), sidewalks 4 m, curb 0.15 m. Map spans ±168 m. Constants in `src/world/layout.ts`.
-- Road graph: 7×7 intersections, `RoadGraph` (Dijkstra paths, street names).
-- The Bank: block (1,2), front faces Union Blvd (z = 0). Interior floor y = 0.95.
-- Drop point: Old Garage in block (5,5), roll-up door facing west.
+- 12×12 blocks, pitch 56 m, roads 14 m (2 lanes each way, right-hand traffic), sidewalks 4 m, curb 0.15 m. Map spans ±336 m; water beyond the south and east shore. Constants in `src/world/layout.ts`.
+- The original 6×6 city is blocks 3..8 at its old world coordinates, so all hand-placed coordinates (bank, shops, stations) stay valid. Add 3 to any old block index.
+- Road graph: 13×13 intersections (one skipped by the overpass), `RoadGraph` (Dijkstra paths, street names). The perimeter is `RING`, the highway.
+- The Bank: block (4,5), front faces Union Blvd (z = 0). Interior floor y = 0.95.
+- Drop point: Old Garage in block (8,8), roll-up door facing west.
 - Player start: the bank's front sidewalk on Union Blvd (-75, -8.6).
 
 ## File map
@@ -84,6 +85,10 @@ src/
   hacking/hack.ts         hacker mode, hackables, effects
   heist/heist.ts          objectives, alarm, win/fail, stats
   heist/jobs.ts           fixer phone: ATM, courier, data, armored truck, evidence
+  map/
+    districts.ts          the 6 districts: tint, styles, traffic + crowd mix, block table
+    chunks.ts             world streaming around the player, parked cars
+    fasttravel.ts         taxi stands + menu
   ui/hud.ts               HUD, minimap, toasts, screens, phone, escape list
   ui/news.ts              radio lines + billboard ticker
   audio/audio.ts          WebAudio synth (engine, siren, hacks, ambience)
@@ -115,6 +120,19 @@ assets/                   reference art (not shipped) + optional models/
 - **Phase 5:** cash in `core/save.ts`/`economy.ts` (fence pays 80 %, 60 % while hot; busted = carried loot confiscated; stash is safe). Upgrades: longer blackouts, cheaper hacks, faster recharge, tuned getaway car. Jobs on J/Enter/X. `render/world.ts`: 8 real minutes per in-game day, rain lowers grip 18 %, rush hour +30 % traffic, a street market closes one Mill St block (`REdge.closed`). Clip keys O = +3 hours, I = rain.
 - **Perf (stress: heat 5, rain, near 4 buildings, Intel Iris Xe, 1920×1080 CSS at 150 % scaling, forced GPU sync):** LOW ≈ 15 ms, MEDIUM ≈ 19 ms, HIGH ≈ 19 ms, ULTRA ≈ 26 ms. Fixes that got there: 8-bit sRGB render target instead of half-float, PCF instead of PCF-soft shadows, 30 Hz shadow refresh on LOW/MEDIUM, MSAA per preset. Game starts on HIGH and auto steps down.
 - Python edits on Windows: use `open(..., encoding='utf-8', newline='')` — default cp1252/CRLF corrupts sources.
+
+## Expansion pass 3 ("the open world")
+- **Phase A, wider map:** 12×12 blocks. Districts in `map/districts.ts`: Downtown (centre-north), Old Town (west), Docks & Industrial (east), Residential (north + south-centre), Park & Waterfront (south rows + the downtown square). `districtAt(x,z)` is the lookup; the shop-row block straddles the line so the pawn shop is Old Town and the safehouse Residential. Districts differ by tint (vertex colours on facades and sidewalks), facade styles, floors, lot types, traffic and crowd weights.
+- **Old Town "narrow streets" default:** road width is unchanged (the road graph and lanes assume 14 m). Buildings crowd 1 m closer on 3 m sidewalks instead.
+- **Highway ring:** perimeter road, no signals or crosswalks, traffic runs up to double cruise, police pathing prefers it. **Bridge:** south side over a harbour channel. **Overpass:** Foundry St flies over Pier Ave in the docks (`OVERPASS`; a 112 m graph edge, node (10,4) only connects along the avenue). `City.elevated()` builds these from `surfaces` plus rail colliders. A seawall stops anyone reaching the water; landward sides end in boundary buildings.
+- **Streaming (`map/chunks.ts`):** a chunk is 2×2 blocks (36 + boundary sectors). On crossing a 28 m cell: chunk meshes hide and free GPU buffers (`geometry.dispose()`, re-uploaded on return), instanced trees/lamps rebuild for active blocks only, signal lamps limit to near heads, parked cars stream in < 115 m and out > 165 m (max 26; a stolen car's spot stays empty for the run), crowd and pigeons re-home. Quality preset `view` sets both the streaming radius and fog far (165–265 m). Colliders and road graph stay loaded (static, cheap). Metro stations render only while the player is underground.
+- **Crowd streaming:** fixed 230-agent pool shuffled so quality drops all roles evenly. Stationary roles claim the nearest free spots within 180 m (released past 205 m); walkers past 195 m reappear out of sight 90 m+ away, accepted by that district's `peds` weights.
+- **Blackouts** no longer swap facade materials per block (chunks are bigger than blocks); the darkness shader alone dims windows.
+- **Vehicle LOD:** hubs off past 35 m, wheels and brake lights off past 110 m (Manhattan distance). Wheels cast no shadows. Saves ~8 draws per car.
+- **Fast travel:** E at a taxi stand (one per district + the safehouse door): $50, free if you're broke, refused while heat > 0.
+- **Clip:** `[` `]` now also teleports to each district's stand. Saved route memory from the old map is discarded (edge count changed).
+- **Perf (stress: heat 5, chase, Intel Iris Xe, 1920×1080 CSS at 150 % scaling, forced GPU sync):** LOW ≈ 15 ms (178 draws), MEDIUM ≈ 16 ms (135), HIGH ≈ 25 ms (240). `npm run build` ≈ 270 KB gz.
+- Minimap redraws at 15 Hz from a sub-rect of the map canvas; it was 4.7 ms per frame before.
 
 ## Testing notes
 - Plain screenshots of the preview pane can return a stale image; `zoom` over the full region captures a fresh frame.

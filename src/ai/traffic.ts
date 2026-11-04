@@ -4,7 +4,11 @@
 import * as THREE from 'three';
 import { PAL } from '../core/palette';
 import { Rng, clamp, wrapAngle } from '../core/math';
-import { LANE, PITCH, ROAD_HALF, lanePoint, HALF, BLOCKS } from '../world/layout';
+import { LANE, PITCH, ROAD_HALF, lanePoint, HALF, RING } from '../world/layout';
+import { DISTRICTS, District, districtAt } from '../map/districts';
+
+export { districtAt };
+export type { District };
 import { Vehicle } from '../vehicles/vehicle';
 import type { CarKind } from '../vehicles/carMesh';
 import type { Game } from '../core/game';
@@ -77,23 +81,8 @@ export function steerTo(v: Vehicle, x: number, z: number, gain = 2.2) {
   return { steer: clamp(-diff * gain, -1, 1), diff };
 }
 
-// ---- districts & spawn weights ------------------------------------------
-export type District = 'downtown' | 'industrial' | 'residential';
-export function districtAt(x: number, z: number): District {
-  const bi = Math.floor((x + HALF) / PITCH), bj = Math.floor((z + HALF) / PITCH);
-  if (Math.abs(bi - 2.5) + Math.abs(bj - 2.5) < 2.6) return 'downtown';
-  if (bi >= 4 || bj >= BLOCKS - 1) return 'industrial';
-  return 'residential';
-}
-
-export const SPAWN_WEIGHTS: Record<District, [CarKind, number][]> = {
-  downtown: [['sedan', 5], ['taxi', 3], ['sports', 1], ['suv', 2], ['hatchback', 2], ['van', 1], ['scooter', 1], ['motorbike', 0.6], ['bicycle', 0.8], ['foodtruck', 0.4], ['boxtruck', 0.5]],
-  industrial: [['pickup', 3], ['boxtruck', 2], ['garbage', 1], ['van', 2], ['sedan', 2], ['muscle', 1], ['suv', 1], ['hatchback', 1], ['motorbike', 0.5]],
-  residential: [['hatchback', 3], ['sedan', 3], ['suv', 2], ['muscle', 0.8], ['pickup', 1], ['bicycle', 1.2], ['scooter', 1], ['motorbike', 0.8], ['van', 0.6]],
-};
-
 export function pickKind(rng: Rng, d: District): CarKind {
-  const w = SPAWN_WEIGHTS[d];
+  const w = DISTRICTS[d].traffic;
   let k = rng.next() * w.reduce((s, x) => s + x[1], 0);
   for (const [kind, wt] of w) { k -= wt; if (k <= 0) return kind; }
   return 'sedan';
@@ -117,14 +106,17 @@ export function colorFor(rng: Rng, kind: CarKind): string {
 
 // Bus loops (node ids are resolved at reset): ring roads around downtown
 const BUS_LOOPS: [number, number][][] = [
+  [[4, 4], [8, 4], [8, 8], [4, 8]],
+  [[5, 5], [5, 7], [7, 7], [7, 5]],
   [[1, 1], [5, 1], [5, 5], [1, 5]],
-  [[2, 2], [2, 4], [4, 4], [4, 2]],
+  [[1, 7], [5, 7], [5, 10], [1, 10]],
 ];
 
 export class Traffic {
   cars: Vehicle[] = [];
   private rng = new Rng(99);
   private emergencyT = 25;
+  private busT = 0;
 
   constructor(private g: Game) {}
 
@@ -137,7 +129,7 @@ export class Traffic {
     this.cars = [];
     for (let i = 0; i < this.target; i++) this.spawn(true);
     // buses on their loops
-    for (const loop of BUS_LOOPS) this.spawnBus(loop);
+    this.busT = 0;
     this.emergencyT = 20;
   }
 
@@ -166,8 +158,9 @@ export class Traffic {
   private findSpot(anywhere: boolean) {
     const g = this.g;
     const P = g.player.worldPos;
+    const edges = g.chunks.nearEdges.length ? g.chunks.nearEdges : g.city.graph.edges;
     for (let tries = 0; tries < 30; tries++) {
-      const e = this.rng.pick(g.city.graph.edges);
+      const e = this.rng.pick(edges);
       if (e.closed) continue;
       const flip = this.rng.chance(0.5);
       const a = flip ? e.b : e.a, b = flip ? e.a : e.b;
@@ -202,13 +195,22 @@ export class Traffic {
       const [ni, nj] = loop[(idx + 1) % loop.length];
       return g.city.graph.path(g.city.graph.node(i, j).id, g.city.graph.node(ni, nj).id).slice(0, -1);
     });
+    // join the loop at a stop that's near the player but out of sight
+    const P = g.player.worldPos;
+    const N = g.city.graph.nodes;
+    const idx = route.findIndex((n, i) => {
+      const nb = N[route[(i + 1) % route.length]];
+      const d = Math.hypot(N[n].x - P.x, N[n].z - P.z);
+      return d > 70 && d < 170 && !g.isVisible(N[n].x, 2, N[n].z) && g.city.graph.edgeBetween(n, nb.id) !== undefined;
+    });
+    if (idx < 0) return;
     const v = new Vehicle('bus', '#3f7b88', g.col);
     v.driver = 'traffic';
     const ai = this.makeAI(8.5);
     ai.route = route;
-    ai.routeI = 1;
+    ai.routeI = (idx + 1) % route.length;
     v.ai = ai;
-    const a = route[0], b = route[1];
+    const a = route[idx], b = route[ai.routeI];
     const pts = edgePoints(g, a, b);
     if (g.vehicles.some((o) => Math.hypot(o.pos.x - pts[3].x, o.pos.z - pts[3].z) < 12)) return;
     this.apply(v, { a, b, pts, k: 2 });
@@ -255,7 +257,11 @@ export class Traffic {
     }
     const civ = this.cars.filter((v) => !(v.ai as DriveAI).route && !(v.ai as DriveAI).emergency).length;
     if (civ < this.target) this.spawn(false);
-    if (this.cars.filter((v) => (v.ai as DriveAI).route).length < BUS_LOOPS.length && this.rng.chance(dt * 0.2)) this.spawnBus(this.rng.pick(BUS_LOOPS));
+    this.busT -= dt;
+    if (this.busT <= 0) {
+      this.busT = 3;
+      if (this.cars.filter((v) => (v.ai as DriveAI).route).length < 2) this.spawnBus(this.rng.pick(BUS_LOOPS));
+    }
     this.emergencyT -= dt;
     if (this.emergencyT <= 0) {
       this.emergencyT = this.rng.range(35, 60);
@@ -301,7 +307,10 @@ export class Traffic {
     this.advance(v, ai);
     const tp = ai.pts[Math.min(ai.idx, ai.pts.length - 1)];
     let { steer, diff } = steerTo(v, tp.x, tp.z);
-    let want = ai.phase === 'turn' && Math.abs(diff) > 0.25 ? Math.min(ai.cruise, 6.5) : ai.cruise;
+    // the ring is a highway: everyone but cyclists opens up
+    const onRing = ai.phase === 'edge' && g.city.graph.edgeBetween(ai.a, ai.b)?.name === RING;
+    const cruise = onRing && v.p.maxSpeed > 12 ? Math.min(v.p.maxSpeed * 0.85, ai.cruise * 2) : ai.cruise;
+    let want = ai.phase === 'turn' && Math.abs(diff) > 0.25 ? Math.min(ai.cruise, 6.5) : cruise;
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
 
     // signals (emergency vehicles run them)

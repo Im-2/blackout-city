@@ -1,7 +1,8 @@
 // DOM HUD + screens. Pixel font, dark navy panels (art bible §6).
 import * as THREE from 'three';
 import { HACK_INFO, HackKind } from '../hacking/hack';
-import { BLOCKS, HALF, PITCH, ROAD_HALF, blockBounds, BANK_BLOCK, DROP_BLOCK } from '../world/layout';
+import { BLOCKS, HALF, PITCH, ROAD_HALF, SHORE, blockBounds, BANK_BLOCK, DROP_BLOCK } from '../world/layout';
+import { DISTRICTS, districtOfBlock } from '../map/districts';
 import type { Game } from '../core/game';
 
 const h = (tag: string, cls = '', html = '') => {
@@ -21,6 +22,7 @@ const CONTROLS = `
   <div><b>M</b> mute</div><div><b>Esc</b> pause · <b>R</b> restart</div>
   <div><b>Shift</b> in vehicle: boost</div><div><b>Hold E</b> pick a lock</div>
   <div><b>J</b> phone · <b>Enter</b> take job</div><div><b>X</b> abandon job</div>
+  <div><b>E</b> at a taxi stand: fast travel</div><div><b>↑↓ Enter</b> pick a destination</div>
 </div>
 <div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> give loot · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
 
@@ -63,6 +65,10 @@ export class Hud {
   private descEl: HTMLDivElement;
   private vehEl: HTMLDivElement;
   private lastHtml: Record<string, string> = {};
+  private miniT = 0;
+  private taxiEl: HTMLDivElement;
+  private bannerEl: HTMLDivElement;
+  private bannerT = 0;
   private radioT = 0;
   private debugEl: HTMLDivElement;
   screens: Record<string, HTMLDivElement> = {};
@@ -87,7 +93,9 @@ export class Hud {
     this.hudLayer.appendChild(obj);
     this.phoneEl = h('div', 'panel phone') as HTMLDivElement;
     this.escEl = h('div', 'panel escapes') as HTMLDivElement;
-    this.hudLayer.append(this.phoneEl, this.escEl);
+    this.taxiEl = h('div', 'panel phone taxi') as HTMLDivElement;
+    this.bannerEl = h('div', 'district-banner') as HTMLDivElement;
+    this.hudLayer.append(this.phoneEl, this.escEl, this.taxiEl, this.bannerEl);
 
     const heat = h('div', 'panel heat');
     this.heatEl = h('div', 'stars') as HTMLDivElement;
@@ -180,6 +188,13 @@ export class Hud {
     setTimeout(() => t.remove(), 2400);
   }
 
+  /** big fade-in name when crossing into a new district */
+  districtBanner(name: string) {
+    this.bannerEl.textContent = name;
+    this.bannerEl.classList.add('on');
+    this.bannerT = 3;
+  }
+
   radio(text: string) {
     this.radioEl.innerHTML = `<span class="tag">RADIO</span> ${text}`;
     this.radioEl.classList.add('on');
@@ -267,11 +282,14 @@ export class Hud {
     }
 
     // prompt
-    const label = g.hack.active ? '' : v && g.carAction ? g.carAction.label : p.pick > 0 ? `PICKING LOCK ${'█'.repeat(Math.round(p.pick * 10))}${'░'.repeat(10 - Math.round(p.pick * 10))}` : p.focusLabel;
+    const label = g.hack.active || g.travel.open ? '' : v && g.carAction ? g.carAction.label : p.pick > 0 ? `PICKING LOCK ${'█'.repeat(Math.round(p.pick * 10))}${'░'.repeat(10 - Math.round(p.pick * 10))}` : p.focusLabel;
     this.prompt.textContent = label ? `[E] ${label}` : v && v.speedAbs < 6 ? '' : '';
     this.prompt.style.display = label ? 'block' : 'none';
 
     this.updateMissionPanels(g);
+    this.set(this.taxiEl, 'taxi', g.travel.menuHtml());
+    this.bannerT -= dt;
+    if (this.bannerT <= 0) this.bannerEl.classList.remove('on');
     this.radioT -= dt;
     if (this.radioT <= 0) this.radioEl.classList.remove('on');
     this.debugEl.style.display = g.debugOverlay ? 'block' : 'none';
@@ -282,6 +300,7 @@ export class Hud {
         `FPS ${g.fps.toFixed(0)}  FRAME ${g.frameMs.toFixed(1)}ms (avg ${g.quality.ema.toFixed(1)})`,
         `QUALITY ${g.quality.p.name}${g.quality.auto ? ' AUTO' : ''}  [F4]`,
         `DRAW ${i.calls}  TRIS ${(i.triangles / 1000).toFixed(0)}k`,
+        `CHUNKS ${g.chunks.active}/${g.chunks.total}  VIEW ${g.quality.p.view}m  ${DISTRICTS[g.chunks.district].name.toUpperCase()}`,
         `PEDS ${c.total}  FULL ${c.full}  GHOST ${c.ghost}  CALLING ${c.calling}`,
         `VEHICLES ${g.vehicles.length}  TRAFFIC ${g.traffic.cars.length}  COPS ${g.police.units.length}  OFFICERS ${g.police.officers.length}`,
         `HEAT ${g.police.heat} (${g.police.progress.toFixed(2)})  UNSEEN ${g.police.lastSeenT.toFixed(1)}s`,
@@ -306,7 +325,9 @@ export class Hud {
     this.crosshair.classList.toggle('locked', !!g.hack.selected);
 
     this.updateMarker(g);
-    this.drawMinimap(g);
+    // 15 Hz is plenty for the minimap and it's the HUD's costliest piece
+    this.miniT -= dt;
+    if (this.miniT <= 0) { this.miniT = 1 / 15; this.drawMinimap(g); }
   }
 
   private set(el: HTMLElement, key: string, html: string) {
@@ -373,8 +394,10 @@ export class Hud {
     const c = document.createElement('canvas');
     c.width = c.height = Math.ceil(E * 2 * S);
     const x = c.getContext('2d')!;
-    x.fillStyle = '#1b2029';
+    x.fillStyle = '#16303c'; // the harbour
     x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#1b2029';
+    x.fillRect(0, 0, (E + SHORE) * S, (E + SHORE) * S);
     x.fillStyle = '#3a3e45';
     x.fillRect((E - HALF - ROAD_HALF) * S, (E - HALF - ROAD_HALF) * S, (HALF + ROAD_HALF) * 2 * S, (HALF + ROAD_HALF) * 2 * S);
     for (let bj = 0; bj < BLOCKS; bj++)
@@ -382,7 +405,7 @@ export class Hud {
         const b = blockBounds(bi, bj);
         const isBank = bi === BANK_BLOCK[0] && bj === BANK_BLOCK[1];
         const isDrop = bi === DROP_BLOCK[0] && bj === DROP_BLOCK[1];
-        x.fillStyle = isBank ? '#4a5a3a' : isDrop ? '#5a4a2a' : '#262b33';
+        x.fillStyle = isBank ? '#4a5a3a' : isDrop ? '#5a4a2a' : DISTRICTS[districtOfBlock(bi, bj)].map;
         x.fillRect((b.x0 + E) * S, (b.z0 + E) * S, (b.x1 - b.x0) * S, (b.z1 - b.z0) * S);
       }
     this.mapBase = c;
@@ -404,7 +427,9 @@ export class Hud {
     c.scale(1, 1);
     const zoom = g.player.vehicle ? 0.55 : 0.85;
     c.scale(zoom, zoom);
-    c.drawImage(this.mapBase!, (-P.x - E) * S, (-P.z - E) * S);
+    // only the part of the big map around the player
+    const R = Math.ceil((W * 0.8) / zoom), sx = Math.round((P.x + E) * S), sz = Math.round((P.z + E) * S);
+    c.drawImage(this.mapBase!, sx - R, sz - R, R * 2, R * 2, -R, -R, R * 2, R * 2);
     // route memory heat on edges
     const pulse = 0.5 + Math.sin(this.t * 5) * 0.5;
     for (const e of g.city.graph.edges) {
@@ -412,6 +437,7 @@ export class Hud {
       const watched = g.police.watched.includes(e.name) && g.police.heat > 0;
       if (it < 0.05 && !watched) continue;
       const A = g.city.graph.nodes[e.a], B = g.city.graph.nodes[e.b];
+      if (Math.abs((A.x + B.x) / 2 - P.x) > 170 || Math.abs((A.z + B.z) / 2 - P.z) > 170) continue;
       c.strokeStyle = watched ? `rgba(255,${60 + pulse * 60},40,${0.5 + it * 0.5})` : `rgba(224,50,42,${it * 0.85})`;
       c.lineWidth = (watched ? 7 : 5) / zoom;
       c.beginPath();

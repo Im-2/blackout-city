@@ -294,6 +294,19 @@ export class Vehicle {
     }
   }
 
+  private lodLevel = 0;
+
+  /** 0 near: everything; 1 mid: no hubs/lights; 2 far: body only. Saves ~8 draw calls per car. */
+  setLod(level: number) {
+    if (level === this.lodLevel) return;
+    this.lodLevel = level;
+    for (const w of this.parts.wheels) {
+      w.visible = level < 2;
+      w.children[0].children[0].visible = level === 0;
+    }
+    this.parts.brake.visible = level < 2;
+  }
+
   /** world-space circle centres (for car-car and car-ped checks) */
   circles(out: { x: number; z: number; off: number }[]) {
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);

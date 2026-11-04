@@ -6,7 +6,8 @@
 import * as THREE from 'three';
 import { Rng, dampAngle, damp } from '../core/math';
 import { RigCharacter, AnimState } from '../characters/rig';
-import { makePedSkin, PedType, WALKER_WEIGHTS } from '../characters/pedTypes';
+import { makePedSkin, PedType } from '../characters/pedTypes';
+import { DISTRICTS, districtAt } from '../map/districts';
 import type { Skin } from '../characters/skins';
 import { BLOCKS, blockBounds, groundHeight, CURB_H } from '../world/layout';
 import { GeoBuilder } from '../world/geo';
@@ -42,9 +43,15 @@ interface Agent {
   dog: THREE.Group | null;
   dist: number;
   panicCD: number;
-  off?: boolean; // over the quality budget: not simulated or drawn
+  off?: boolean; // over the quality budget or parked: not simulated or drawn
+  spot: Station | null;
+  /** no free spot nearby for a stationary role */
+  parked: boolean;
 }
 
+interface Station { x: number; z: number; heading: number; anim: AnimState; taken: Agent | null; }
+
+const POOL = 230;
 const FULL_R = 52;
 const GHOST_R = 165;
 
@@ -139,64 +146,140 @@ export class Pedestrians {
   }
 
   // ------------------------------------------------------------------ setup
+  private spots: Record<string, Station[]> = {};
+  private nearNodes: number[] = [];
+
+  /** every place a stationary role can stand, across the whole city */
+  private buildSpots() {
+    const g = this.g, life = g.street;
+    const S: Record<string, Station[]> = { vendor: [], queue: [], busker: [], guard: [], sitter: [], chat: [] };
+    const add = (role: string, x: number, z: number, heading: number, anim: AnimState) => S[role].push({ x, z, heading, anim, taken: null });
+    for (const c of life.carts) {
+      add('vendor', c.x, c.z, c.heading, 'idle');
+      c.queue.forEach((q, i) => add('queue', q.x, q.z, Math.atan2(c.x - q.x, c.z - q.z), i === 0 ? 'chat' : 'idle'));
+    }
+    for (const a of life.atms) a.queue.forEach((q, i) => add('queue', q.x, q.z, q.heading, i === 0 ? 'phone' : 'idle'));
+    for (const b of life.buskerSpots) add('busker', b.x, b.z, b.heading, 'busk');
+    for (const s of life.guardSpots) add('guard', s.x, s.z, s.heading, 'idle');
+    for (const b of g.city.benches) add('sitter', b.x, b.z, b.yaw, 'sit');
+    for (const c of life.chatSpots) {
+      const n = this.rng.int(2, 4);
+      for (let i = 0; i < n; i++) {
+        const ang = (i / n) * Math.PI * 2;
+        const x = c.x + Math.sin(ang) * 0.75, z = c.z + Math.cos(ang) * 0.75;
+        add('chat', x, z, Math.atan2(c.x - x, c.z - z), i % 2 ? 'idle' : 'chat');
+      }
+    }
+    this.spots = S;
+  }
+
   reset() {
     const g = this.g;
-    for (const a of this.agents) { if (a.rig) g.scene.remove(a.rig.root); if (a.dog) g.scene.remove(a.dog); }
-    this.agents = [];
-    this.dogPool = [];
-    const total = 230; // max pool; quality.peds decides how many are live
+    this.buildSpots();
     const r = this.rng;
-    const life = g.street;
-    const add = (type: PedType, role: Role, anchor: Agent['anchor']) => {
-      const skin = makePedSkin(type, r);
+    // restarting reuses the same cast: skins and rigs are cached, so no new textures
+    if (this.agents.length) {
+      for (const a of this.agents) {
+        if (a.dog) { a.dog.visible = false; this.dogPool.push(a.dog); a.dog = null; }
+        if (a.rig) a.rig.root.visible = false;
+        a.full = false;
+        a.spot = null;
+        a.anchor = null;
+        a.parked = false;
+        a.state = 'walk';
+        a.goal = null;
+        a.vx = a.vz = 0;
+      }
+      this.onChunkChange();
+      const Q = g.player.worldPos;
+      for (const a of this.agents) if (a.role === 'walker') { a.dist = 999; this.relocate(a, Q.x, Q.z, true); }
+      return;
+    }
+    const make = (type: PedType, role: Role) => {
       const n = r.int(0, this.nodes.length - 1);
       const A = this.nodes[n];
       const e = r.pick(A.edges);
-      const ag: Agent = {
-        type, role, skin, x: A.x, z: A.z, y: CURB_H, heading: 0,
+      this.agents.push({
+        type, role, skin: makePedSkin(type, r), x: A.x, z: A.z, y: CURB_H, heading: 0,
         speed: type === 'jogger' ? r.range(3.0, 3.6) : type === 'courier' ? r.range(1.6, 1.9) : type === 'tourist' ? r.range(0.9, 1.2) : r.range(1.15, 1.55),
         v: 0, a: n, b: e.a === n ? e.b : e.a, edge: e, t: r.next(), lat: r.range(-1.0, 1.0),
-        state: anchor ? 'station' : 'walk', timer: r.range(3, 15), anchor, goal: null, rig: null, full: false,
-        vx: 0, vz: 0, callT: 0, losT: 0, dog: null, dist: 999, panicCD: 0,
-      };
-      if (anchor) { ag.x = anchor.x; ag.z = anchor.z; ag.heading = anchor.heading; }
-      else this.placeOnEdge(ag);
-      this.agents.push(ag);
-      return ag;
+        state: 'walk', timer: r.range(3, 15), anchor: null, goal: null, rig: null, full: false,
+        vx: 0, vz: 0, callT: 0, losT: 0, dog: null, dist: 999, panicCD: 0, spot: null, parked: false,
+      });
     };
-    // stationary roles
-    for (const c of life.carts) {
-      add('vendor', 'vendor', { x: c.x, z: c.z, heading: c.heading, anim: 'idle' });
-      const nq = r.int(0, 3);
-      for (let i = 0; i < nq; i++) { const q = c.queue[i]; add(r.pick(['office', 'local', 'teen', 'construction'] as PedType[]), 'queue', { x: q.x, z: q.z, heading: Math.atan2(c.x - q.x, c.z - q.z), anim: i === 0 ? 'chat' : 'idle' }); }
+    const mix: PedType[] = ['office', 'local', 'teen', 'tourist', 'construction'];
+    for (let i = 0; i < 10; i++) make('vendor', 'vendor');
+    for (let i = 0; i < 5; i++) make('busker', 'busker');
+    for (let i = 0; i < 6; i++) make('security', 'guard');
+    for (let i = 0; i < 18; i++) make(i % 3 === 0 ? 'homeless' : r.pick(mix), 'sitter');
+    for (let i = 0; i < 22; i++) make(r.pick(mix), 'queue');
+    for (let i = 0; i < 44; i++) make(r.pick(mix), 'chat');
+    // walkers: the citywide mix; relocation below keeps each type in the districts that want it
+    const all = Object.values(DISTRICTS).flatMap((d) => d.peds);
+    const sum = all.reduce((a, w) => a + w[1], 0);
+    while (this.agents.length < POOL) {
+      let k = r.next() * sum, type: PedType = 'local';
+      for (const [t, w] of all) { k -= w; if (k <= 0) { type = t; break; } }
+      make(type === 'security' ? 'local' : type, 'walker');
     }
-    for (const a of life.atms) if (r.chance(0.6)) {
-      const nq = r.int(1, 2);
-      for (let i = 0; i < nq; i++) { const q = a.queue[i]; add(r.pick(['office', 'local', 'tourist'] as PedType[]), 'queue', { x: q.x, z: q.z, heading: q.heading, anim: i === 0 ? 'phone' : 'idle' }); }
-    }
-    for (const b of life.buskerSpots) add('busker', 'busker', { x: b.x, z: b.z, heading: b.heading, anim: 'busk' });
-    for (const s of life.guardSpots) add('security', 'guard', { x: s.x, z: s.z, heading: s.heading, anim: 'idle' });
-    const benches = [...g.city.benches].sort(() => r.next() - 0.5);
-    for (let i = 0; i < Math.min(benches.length, Math.round(total * 0.08)); i++) {
-      const b = benches[i];
-      const off = r.range(-0.5, 0.5);
-      add(i % 3 === 0 ? 'homeless' : r.pick(['office', 'local', 'tourist', 'teen'] as PedType[]), 'sitter', { x: b.x + Math.cos(b.yaw) * off, z: b.z - Math.sin(b.yaw) * off + Math.cos(b.yaw) * 0.05, heading: b.yaw, anim: 'sit' });
-    }
-    for (const c of life.chatSpots) {
-      if (this.agents.length > total * 0.45) break;
-      const n = r.int(2, 4);
-      for (let i = 0; i < n; i++) {
-        const ang = (i / n) * Math.PI * 2 + r.range(-0.2, 0.2);
-        const x = c.x + Math.sin(ang) * 0.75, z = c.z + Math.cos(ang) * 0.75;
-        add(r.pick(['office', 'local', 'teen', 'tourist', 'construction'] as PedType[]), 'chat', { x, z, heading: Math.atan2(c.x - x, c.z - z), anim: r.chance(0.6) ? 'chat' : 'idle' });
+    // shuffle so lower quality drops all roles evenly
+    for (let i = this.agents.length - 1; i > 0; i--) { const j = r.int(0, i); [this.agents[i], this.agents[j]] = [this.agents[j], this.agents[i]]; }
+    this.onChunkChange();
+    const P = g.player.worldPos;
+    for (const a of this.agents) if (a.role === 'walker') { a.dist = 999; this.relocate(a, P.x, P.z, true); }
+  }
+
+  /** Crowd streaming: stationary roles take the nearest free spots around the player. */
+  onChunkChange() {
+    if (!this.agents.length) return;
+    const P = this.g.player.worldPos;
+    this.nearNodes = [];
+    for (let i = 0; i < this.nodes.length; i++) if (Math.hypot(this.nodes[i].x - P.x, this.nodes[i].z - P.z) < 180) this.nearNodes.push(i);
+    for (const role of ['vendor', 'queue', 'busker', 'guard', 'sitter', 'chat'] as Role[]) {
+      const list = this.spots[role];
+      const agents = this.agents.filter((a) => a.role === role);
+      for (const a of agents) {
+        if (a.spot && Math.hypot(a.spot.x - P.x, a.spot.z - P.z) > 205) { a.spot.taken = null; a.spot = null; a.anchor = null; }
+      }
+      const free = list.filter((s) => !s.taken && Math.hypot(s.x - P.x, s.z - P.z) < 180).sort((p, q) => Math.hypot(p.x - P.x, p.z - P.z) - Math.hypot(q.x - P.x, q.z - P.z));
+      let i = 0;
+      for (const a of agents) {
+        if (a.spot) { a.parked = false; continue; }
+        const s = free[i++];
+        if (!s) { a.parked = true; continue; }
+        s.taken = a;
+        a.spot = s;
+        a.parked = false;
+        a.anchor = { x: s.x, z: s.z, heading: s.heading, anim: s.anim };
+        a.x = s.x; a.z = s.z; a.heading = s.heading; a.state = 'station';
       }
     }
-    // walkers fill the rest
-    const wsum = WALKER_WEIGHTS.reduce((s, w) => s + w[1], 0);
-    while (this.agents.length < total) {
-      let k = r.next() * wsum, type: PedType = 'local';
-      for (const [t, w] of WALKER_WEIGHTS) { k -= w; if (k <= 0) { type = t; break; } }
-      add(type, 'walker', null);
+  }
+
+  /** Walkers that fall behind reappear out of sight, in a district that suits them. */
+  private relocate(a: Agent, px: number, pz: number, initial = false) {
+    const g = this.g;
+    if (!this.nearNodes.length) return;
+    for (let tries = 0; tries < 6; tries++) {
+      const n = this.rng.pick(this.nearNodes);
+      const A = this.nodes[n];
+      const d = Math.hypot(A.x - px, A.z - pz);
+      if (!initial && (d < 90 || g.isVisible(A.x, 1, A.z))) continue;
+      const D = DISTRICTS[districtAt(A.x, A.z)];
+      const w = D.peds.find((p) => p[0] === a.type);
+      const max = Math.max(...D.peds.map((p) => p[1]));
+      if (this.rng.next() > ((w ? w[1] : 0.15) / max) * D.crowd && tries < 5) continue;
+      a.a = n;
+      a.edge = this.pickEdge(n, -1);
+      a.b = a.edge.a === n ? a.edge.b : a.edge.a;
+      a.t = this.rng.next();
+      a.lat = this.rng.range(-1, 1);
+      a.state = 'walk';
+      a.timer = this.rng.range(4, 14);
+      a.goal = null;
+      this.placeOnEdge(a);
+      a.y = CURB_H;
+      return;
     }
   }
 
@@ -214,7 +297,7 @@ export class Pedestrians {
   panic(pos: THREE.Vector3, radius: number, handsUp = false) {
     let screamed = false;
     for (const a of this.agents) {
-      if (a.state === 'knocked' || a.state === 'inside' || a.panicCD > 0) continue;
+      if (a.off || a.state === 'knocked' || a.state === 'inside' || a.panicCD > 0) continue;
       const d = Math.hypot(a.x - pos.x, a.z - pos.z);
       if (d > radius) continue;
       this.scare(a, pos.x, pos.z, handsUp && d < radius * 0.6);
@@ -233,7 +316,7 @@ export class Pedestrians {
 
   lure(pos: THREE.Vector3, radius = 40) {
     for (const a of this.agents) {
-      if (a.state === 'knocked' || a.state === 'panic' || a.state === 'inside' || a.role === 'vendor') continue;
+      if (a.off || a.state === 'knocked' || a.state === 'panic' || a.state === 'inside' || a.role === 'vendor') continue;
       if (Math.hypot(a.x - pos.x, a.z - pos.z) < radius) {
         a.state = 'lured';
         a.timer = this.rng.range(8, 13);
@@ -256,7 +339,7 @@ export class Pedestrians {
   witnessCrime(pos: THREE.Vector3, kind: string, maxCallers = 2) {
     const g = this.g;
     const cands = this.agents
-      .filter((a) => a.state !== 'inside' && a.state !== 'knocked' && a.state !== 'calling' && a.role !== 'guard' && Math.hypot(a.x - pos.x, a.z - pos.z) < 34)
+      .filter((a) => !a.off && a.state !== 'inside' && a.state !== 'knocked' && a.state !== 'calling' && a.role !== 'guard' && Math.hypot(a.x - pos.x, a.z - pos.z) < 34)
       .sort((p, q) => Math.hypot(p.x - pos.x, p.z - pos.z) - Math.hypot(q.x - pos.x, q.z - pos.z))
       .slice(0, 8);
     let n = 0;
@@ -284,15 +367,18 @@ export class Pedestrians {
     const live = g.quality.p.peds;
     this.agents.forEach((a, i) => {
       a.dist = Math.hypot(a.x - P.x, a.z - P.z);
-      a.off = i >= live;
+      a.off = i >= live || a.parked;
     });
     if (this.lodT <= 0) { this.lodT = 0.3; this.assignLod(); }
 
-    let calling = 0;
+    let calling = 0, moved = 0;
     for (const a of this.agents) {
       if (a.off) continue;
       if (a.state === 'inside') { a.timer -= dt; if (a.timer <= 0) this.emerge(a); continue; }
-      if (a.dist > GHOST_R + 30) { this.cheapUpdate(a, dt); continue; }
+      if (a.dist > GHOST_R + 30) {
+        if (a.role === 'walker' && moved < 8) { moved++; this.relocate(a, P.x, P.z); }
+        continue;
+      }
       a.panicCD -= dt;
       this.reactToCars(a);
       this.think(a, dt);
@@ -320,13 +406,6 @@ export class Pedestrians {
       case 'dodge': return 'vault';
       default: return a.v > 2.6 ? 'run' : a.v > 0.2 ? 'walk' : 'idle';
     }
-  }
-
-  private cheapUpdate(a: Agent, dt: number) {
-    if (a.state !== 'walk' || !a.edge) return;
-    a.t += (a.speed * dt) / a.edge.len;
-    if (a.t >= 1) this.arrive(a);
-    else this.placeOnEdge(a);
   }
 
   private reactToCars(a: Agent) {
@@ -505,7 +584,9 @@ export class Pedestrians {
   }
 
   private emerge(a: Agent) {
-    const d = this.rng.pick(this.g.city.doors);
+    const P = this.g.player.worldPos;
+    let d = this.rng.pick(this.g.city.doors);
+    for (let i = 0; i < 12 && Math.hypot(d.x - P.x, d.z - P.z) > 150; i++) d = this.rng.pick(this.g.city.doors);
     a.x = d.x; a.z = d.z; a.heading = d.heading;
     a.a = this.nearestNode(d.x, d.z);
     a.state = 'return';
@@ -534,7 +615,7 @@ export class Pedestrians {
       if (f) full++;
     }
     this.stats.full = full;
-    this.stats.total = Math.min(this.agents.length, g.quality.p.peds);
+    this.stats.total = this.agents.filter((a) => !a.off).length;
   }
 
   private drawGhosts() {

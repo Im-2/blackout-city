@@ -14,7 +14,7 @@ import { Player, Interactable } from '../player/player';
 import { CameraRig } from '../player/camera';
 import { Vehicle, collideVehicles, ImpactEvent } from '../vehicles/vehicle';
 import { Skids } from '../vehicles/skids';
-import { Traffic, pickKind, districtAt, colorFor } from '../ai/traffic';
+import { Traffic, pickKind, colorFor } from '../ai/traffic';
 import { Police } from '../ai/police';
 import { RouteMemory } from '../ai/routeMemory';
 import { Pedestrians } from '../ai/pedestrians';
@@ -38,6 +38,8 @@ import { Loot, Shop } from './economy';
 import { Jobs } from '../heist/jobs';
 import { WorldTime } from '../render/world';
 import { Escapes } from '../ai/escapes';
+import { Chunks } from '../map/chunks';
+import { FastTravel } from '../map/fasttravel';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results';
 
@@ -81,6 +83,8 @@ export class Game {
   jobs!: Jobs;
   world!: WorldTime;
   escapes!: Escapes;
+  chunks!: Chunks;
+  travel!: FastTravel;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
   private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean } | null = null;
@@ -152,6 +156,8 @@ export class Game {
     this.routes = new RouteMemory(this.city.graph);
     this.street = new StreetLife(this.city, this.col).build();
     this.scene.add(this.street.group);
+    this.city.finalize();
+    this.chunks = new Chunks(this);
     await step(0.65, 'looking for character models');
     const found = await loadCharacterModels((m) => H.loading(0.7, m));
     if (found.length) console.info('[models] using', found.join(', '));
@@ -172,6 +178,7 @@ export class Game {
     await step(0.82, 'opening shops');
     this.buildings = new Buildings(this).build();
     this.escapes = new Escapes(this).build();
+    this.travel = new FastTravel(this).build();
     this.hack.build();
     this.heist = new Heist(this);
     this.news = new News(this);
@@ -253,18 +260,6 @@ export class Game {
     this.cameras.reset();
     this.post.damage = 0;
 
-    // parked cars along curbs
-    const spots = [...this.city.parking].sort(() => this.rng.next() - 0.5).slice(0, 22);
-    for (const s of spots) {
-      const kind = pickKind(this.rng, districtAt(s.x, s.z));
-      const v = new Vehicle(kind === 'bus' ? 'sedan' : kind, colorFor(this.rng, kind), this.col);
-      v.place(s.x, s.z, s.heading);
-      v.parked = true;
-      v.locked = kind !== 'bicycle';
-      v.handbrake = true;
-      this.addVehicle(v);
-      this.parked.push(v);
-    }
     // the getaway car behind the bank
     const gs = this.bank.getawaySpot;
     const ga = new Vehicle('sedan', '#5b6433', this.col);
@@ -278,6 +273,7 @@ export class Game {
     this.player.spawn(st.x, st.z, st.heading);
     this.camRig.snapBehind(st.heading);
     this.camRig.pitch = -0.12;
+    this.chunks.reset();
     this.traffic.reset();
     this.peds.reset();
     this.guards.reset();
@@ -312,12 +308,15 @@ export class Game {
 
     if (clip) {
       // instant chase: mid-city, next to the getaway car, heat 3
-      const c = blockCenter(3, 3);
+      const c = blockCenter(6, 6);
       ga.place(c.x - 30, c.z + 4, 0);
       this.player.spawn(c.x - 32.9, c.z + 4, 0);
       this.camRig.snapBehind(0);
       this.police.minHeat = 1;
       this.police.setHeat(3, 'clip mode');
+      this.chunks.update();
+    const LP = this.player.worldPos;
+    for (const v of this.vehicles) { const d = Math.abs(v.pos.x - LP.x) + Math.abs(v.pos.z - LP.z); v.setLod(d < 35 ? 0 : d < 110 ? 1 : 2); }
     }
   }
 
@@ -354,6 +353,7 @@ export class Game {
   sites(): { name: string; x: number; z: number; heading: number }[] {
     return [
       { name: 'Bank', x: this.bank.playerStart.x, z: this.bank.playerStart.z, heading: Math.PI },
+      ...this.travel.stands.map((s) => ({ name: `District: ${s.name}`, x: s.x + 1.6, z: s.z + 1.2, heading: 0 })),
       ...this.buildings.sites.map((s) => ({ name: s.name, ...s.approach })),
       { name: 'Old Garage drop', x: this.city.dropZone.doorX - 18, z: this.city.dropZone.doorZ, heading: Math.PI / 2 },
       ...this.escapes.stations.map((s) => ({ name: `${s.name} station`, x: s.entrance.x, z: s.entrance.z + 3, heading: Math.PI })),
@@ -531,6 +531,9 @@ export class Game {
     this.peds.update(dt);
     this.ambient.update(dt);
     this.street.update(dt);
+    this.chunks.update();
+    this.city.flushInstances();
+    this.travel.update();
     this.buildings.update(dt);
     this.escapes.update(dt);
     this.jobs.update(dt);

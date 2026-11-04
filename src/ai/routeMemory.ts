@@ -53,9 +53,14 @@ export class RouteMemory {
   }
 
   /** 0..1 normalized intensity per edge for the minimap. */
+  private maxT = -1;
+  private maxScore = 150;
+
   intensity(e: REdge) {
-    const max = Math.max(150, ...this.scores);
-    return Math.min(1, this.scores[e.id] / max);
+    // recomputed a few times a second: this is called per edge by the minimap
+    const now = performance.now();
+    if (now - this.maxT > 300) { this.maxT = now; this.maxScore = Math.max(150, ...this.scores); }
+    return Math.min(1, this.scores[e.id] / this.maxScore);
   }
 
   /** Streets ranked by learned score (sum of their edges). */

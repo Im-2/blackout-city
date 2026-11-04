@@ -2,7 +2,7 @@
 // foot, busting — plus ADAPTIVE stakeouts on the player's favourite routes.
 import * as THREE from 'three';
 import { Rng, clamp, damp, dampAngle, wrapAngle } from '../core/math';
-import { LANE, PITCH, lanePoint, groundHeight, HALF } from '../world/layout';
+import { LANE, PITCH, lanePoint, groundHeight, HALF, RING } from '../world/layout';
 import { Vehicle } from '../vehicles/vehicle';
 import { createCharacter } from '../characters/loader';
 import { COP_SKIN, SWAT_SKIN } from '../characters/skins';
@@ -325,7 +325,7 @@ export class Police {
       let placed = false;
       // prefer arriving from a watched route (adaptive), else any hidden node 80-150 m away
       const watchedEdges = this.heat > 0 ? g.routes.topEdges(3) : [];
-      const tryEdges = [...watchedEdges.filter(() => this.rng.chance(0.5)), ...Array.from({ length: 40 }, () => this.rng.pick(g.city.graph.edges))];
+      const tryEdges = [...watchedEdges.filter(() => this.rng.chance(0.5)), ...Array.from({ length: 40 }, () => this.rng.pick(g.chunks.nearEdges.length ? g.chunks.nearEdges : g.city.graph.edges))];
       for (const e of tryEdges) {
         const flip = this.rng.chance(0.5);
         const a = flip ? e.b : e.a, b = flip ? e.a : e.b;
@@ -534,7 +534,7 @@ export class Police {
     const towardB = (B.x - A.x) * fx + (B.z - A.z) * fz > 0;
     const from = towardB ? e.a : e.b, start = towardB ? e.b : e.a;
     const goal = G.nearestNode(tx, tz).id;
-    const path = [from, ...G.path(start, goal, (e) => (e.closed ? 40 : 1))];
+    const path = [from, ...G.path(start, goal, (e) => (e.closed ? 40 : e.name === RING ? 0.6 : 1))];
     const pts: Pt[] = [];
     const S = G.nodes[start];
     pts.push(lanePoint(G.nodes[from].x, G.nodes[from].z, S.x, S.z, 0.85, LANE * 0.5));

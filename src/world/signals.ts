@@ -27,6 +27,7 @@ export class Signals {
   private q = new THREE.Quaternion();
   private c = new THREE.Color();
   private blink = 0;
+  private activeHeads: number[] = [];
 
   constructor(private city: City, scene: THREE.Scene) {
     this.nodes = city.graph.nodes.map((n) => ({
@@ -42,7 +43,9 @@ export class Signals {
     const geo = new THREE.BoxGeometry(0.34, 0.34, 0.08);
     this.lamps = new THREE.InstancedMesh(geo, basicMat({ color: 0xffffff }), city.signalHeads.length);
     this.lamps.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(city.signalHeads.length * 3), 3);
+    this.lamps.frustumCulled = false;
     scene.add(this.lamps);
+    this.activeHeads = city.signalHeads.map((_, i) => i);
     this.refresh();
   }
 
@@ -89,6 +92,13 @@ export class Signals {
     });
   }
 
+  /** only write lit lamps near the player */
+  stream(x: number, z: number, radius: number) {
+    const heads = this.city.signalHeads;
+    this.activeHeads = [];
+    for (let i = 0; i < heads.length; i++) if (Math.hypot(heads[i].pos.x - x, heads[i].pos.z - z) < radius + 20) this.activeHeads.push(i);
+  }
+
   reset() {
     for (const s of this.nodes) { s.override = null; s.copStop = false; s.overrideT = 0; }
   }
@@ -109,22 +119,27 @@ export class Signals {
     this.refresh();
   }
 
+  private tmpP = new THREE.Vector3();
+  private tmpS = new THREE.Vector3(1, 1, 1);
+
   private refresh() {
     const heads = this.city.signalHeads;
-    for (let i = 0; i < heads.length; i++) {
+    let n = 0;
+    for (const i of this.activeHeads) {
       const h = heads[i];
       const st = this.state(h.node, h.axis);
       const ov = this.nodes[h.node].override;
       const dy = st === 'red' ? 0.42 : st === 'yellow' ? 0 : -0.42;
       this.q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, h.facing);
-      const fx = Math.sin(h.facing) * 0.0, fz = Math.cos(h.facing) * 0.0;
       // hacked lights strobe so the effect reads on camera
       const strobe = ov && Math.sin(this.blink * 18) > 0.3 ? 0.35 : 1;
-      this.m.compose(new THREE.Vector3(h.pos.x + fx, h.pos.y + dy, h.pos.z + fz), this.q, new THREE.Vector3(1, 1, 1));
-      this.lamps.setMatrixAt(i, this.m);
+      this.m.compose(this.tmpP.set(h.pos.x, h.pos.y + dy, h.pos.z), this.q, this.tmpS);
+      this.lamps.setMatrixAt(n, this.m);
       this.c.set(st === 'red' ? '#ff3a2a' : st === 'yellow' ? '#ffb42a' : '#4dff7a').multiplyScalar(strobe * 1.4);
-      this.lamps.setColorAt(i, this.c);
+      this.lamps.setColorAt(n, this.c);
+      n++;
     }
+    this.lamps.count = n;
     this.lamps.instanceMatrix.needsUpdate = true;
     if (this.lamps.instanceColor) this.lamps.instanceColor.needsUpdate = true;
   }

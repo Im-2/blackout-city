@@ -22,7 +22,7 @@ export function updateDebug(g: Game) {
   }
   if (inp.pressed('KeyT')) teleport(g, g.bank.playerStart.x, -46, 0, 'BANK (BACK ALLEY)');
   if (inp.pressed('KeyY')) teleport(g, g.city.dropZone.doorX - 18, g.city.dropZone.doorZ, Math.PI / 2, 'DROP POINT');
-  if (inp.pressed('KeyU')) { const c = blockCenter(3, 3); teleport(g, c.x - 30, c.z - 2, 0, 'MID-CITY'); }
+  if (inp.pressed('KeyU')) { const c = blockCenter(6, 6); teleport(g, c.x - 30, c.z - 2, 0, 'MID-CITY'); }
   if (inp.pressed('KeyG')) { g.spawnGetawayBeside(); g.hud.toast('DEBUG: GETAWAY CAR', 'dim'); }
   if (inp.pressed('KeyL') && !g.heist.hasLoot) {
     g.heist.reset(true);

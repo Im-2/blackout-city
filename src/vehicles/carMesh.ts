@@ -261,7 +261,6 @@ export function buildCar(kind: CarKind, color: string): CarParts {
     pivot.position.set(sx * (d.track / 2 + 0.02), d.wheelR, sz * d.wheelBase / 2);
     const w = new THREE.Mesh(wheelGeo, wheelMat!);
     w.scale.set(d.two ? (kind === 'bicycle' ? 0.05 : 0.14) : 0.28, d.wheelR, d.wheelR);
-    w.castShadow = true;
     if (!hubMat) hubMat = worldMat({ color: '#8a8a84' });
     w.add(new THREE.Mesh(kind === 'bicycle' ? spokeGeo : hubGeo, hubMat));
     pivot.add(w);

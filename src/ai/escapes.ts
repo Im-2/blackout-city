@@ -36,6 +36,8 @@ export class Escapes {
   private t = 0;
   private vanSpot: Interactable | null = null;
   private tickerT = 0;
+  /** stations only render while the player is underground */
+  private undergroundGroups: THREE.Object3D[] = [];
 
   constructor(private g: Game) {}
 
@@ -54,8 +56,10 @@ export class Escapes {
     const g = this.g;
     const defs: [string, number, number][] = [
       ['Union Sq', -98, 9.2],
-      ['Foundry', 66, -60.8],
-      ['Harbor', 120, 117.2],
+      ['Foundry', 66, -47.2],
+      ['Harbor', 121, 121],
+      ['Old Town', -250, 65],
+      ['Northside', 25, -271],
     ];
     const ext = new GeoBuilder();
     defs.forEach(([name, x, z], i) => {
@@ -87,6 +91,7 @@ export class Escapes {
       k.sign(`${name.toUpperCase()} STATION`, x, UG + 3.2, z + 5.2, 0, 5, 0.6, '#2f5a8a', '#ffffff');
       for (let bx = px0 + 3; bx < px1 - 2; bx += 7) k.block(bx, UG, z + 3.2, bx + 2, UG + 0.5, z + 3.8, '#6b4a30');
       k.finish(g.scene);
+      this.undergroundGroups.push(k.group);
       // the train
       const train = new THREE.Group();
       const tb = new GeoBuilder();
@@ -103,6 +108,7 @@ export class Escapes {
       train.add(new THREE.Mesh(tg.build(), basicMat({ vertexColors: true })));
       train.position.set(px1 + 40, UG, z + 7.2);
       g.scene.add(train);
+      this.undergroundGroups.push(train);
       const st: Station = { name, entrance: new THREE.Vector3(x, CURB_H, z), platform: new THREE.Vector3(x, UG, z + 3), heading: 0, trainT: i * 9, train, doorsOpen: false };
       this.stations.push(st);
       let gateOpen = false;
@@ -147,7 +153,9 @@ export class Escapes {
     const spots: [number, number, string][] = [
       [-60, -30, 'Bank alley'], [130, 130, 'Harbor yards'],
       [10, -100, 'Foundry St'], [-120, 90, 'Mill St'],
-      [-30, 60, 'Canal St'], [100, -20, 'Lantern Ave'],
+      [-30, 60, 'Canal St'], [104, -20, 'Lantern Ave'],
+      [-228, 60, 'Old Town'], [224, -30, 'Pier Ave'],
+      [-60, -220, 'Northside'], [60, 280, 'Shore Rd'],
     ];
     const b = new GeoBuilder();
     spots.forEach(([x, z, name], i) => {
@@ -173,8 +181,8 @@ export class Escapes {
   private buildDumpsters() {
     const g = this.g;
     const b = new GeoBuilder();
-    for (let i = 0; i < 12; i++) {
-      const bi = this.rng.int(0, 5), bj = this.rng.int(0, 5);
+    for (let i = 0; i < 40; i++) {
+      const bi = this.rng.int(0, 11), bj = this.rng.int(0, 11);
       const bb = blockBounds(bi, bj);
       const x = this.rng.range(bb.x0 + 6, bb.x1 - 6), z = bb.z1 - 3.4;
       if (g.col.query(x - 1.2, z - 0.8, x + 1.2, z + 0.8).length) continue;
@@ -193,7 +201,7 @@ export class Escapes {
   // ------------------------------------------------------------------ decoys
   private buildBillboards() {
     const g = this.g;
-    const spots: [number, number, number][] = [[-56, -9, 0], [0, 46, Math.PI], [56, -66, 0], [-112, 66, Math.PI], [112, 9, 0], [9, -112, Math.PI / 2]];
+    const spots: [number, number, number][] = [[-224, 9, 0], [224, -66, 0], [0, -224, Math.PI], [-112, 234, Math.PI], [-56, -9, 0], [0, 46, Math.PI], [56, -66, 0], [-112, 66, Math.PI], [112, 9, 0], [9, -112, Math.PI / 2]];
     for (const [x, z, h] of spots) {
       const c = document.createElement('canvas');
       c.width = 128;
@@ -242,7 +250,7 @@ export class Escapes {
       led.position.y = -0.1;
       grp.add(led);
       g.scene.add(grp);
-      const c = new THREE.Vector3(roadCoord(1 + i) + PITCH / 2, 18 + i * 2, roadCoord(1 + ((i * 2) % 4)) + PITCH / 2);
+      const c = new THREE.Vector3(roadCoord(4 + i) + PITCH / 2, 18 + i * 2, roadCoord(4 + ((i * 2) % 4)) + PITCH / 2);
       const d: Drone = { group: grp, center: c, r: 30 + i * 8, t: i * 2, speed: 0.12 + i * 0.02, decoyT: 0, vel: new THREE.Vector3() };
       this.drones.push(d);
       g.hack.hackables.push({
@@ -262,7 +270,7 @@ export class Escapes {
   private buildBollards() {
     const g = this.g;
     const G = g.city.graph;
-    const picks = [G.edges.find((e) => e.name === 'Union Blvd' && G.nodes[e.a].i === 3), G.edges.find((e) => e.name === 'Main Ave' && G.nodes[e.a].j === 4), G.edges.find((e) => e.name === 'Kettle Ave' && G.nodes[e.a].j === 1)];
+    const picks = [G.edges.find((e) => e.name === 'Union Blvd' && G.nodes[e.a].i === 6), G.edges.find((e) => e.name === 'Main Ave' && G.nodes[e.a].j === 7), G.edges.find((e) => e.name === 'Kettle Ave' && G.nodes[e.a].j === 4)];
     for (const e of picks) {
       if (!e) continue;
       const A = G.nodes[e.a], B = G.nodes[e.b];
@@ -322,6 +330,8 @@ export class Escapes {
   update(dt: number) {
     const g = this.g;
     this.t += dt;
+    const under = g.player.pos.y < -2;
+    for (const o of this.undergroundGroups) o.visible = under;
     // trains: arrive, stop with doors open, leave
     for (const s of this.stations) {
       s.trainT = (s.trainT + dt) % 30;
@@ -340,6 +350,7 @@ export class Escapes {
     if (this.tickerT <= 0) {
       this.tickerT = 0.12;
       for (const b of this.billboards) {
+        if (b.pos.distanceTo(g.player.worldPos) > 170) continue;
         const c = b.ctx;
         if (b.flashT > 0) {
           b.flashT -= 0.12;

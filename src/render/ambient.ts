@@ -50,7 +50,7 @@ export class Ambient {
     // litter: static instanced scraps
     const lit = new GeoBuilder();
     lit.box(-0.08, 0, -0.06, 0.08, 0.01, 0.06, { color: '#ffffff' });
-    const nL = 320;
+    const nL = 1100;
     const litter = new THREE.InstancedMesh(lit.build(), mat, nL);
     const c = new THREE.Color();
     for (let i = 0; i < nL; i++) {
@@ -70,12 +70,25 @@ export class Ambient {
     g.scene.add(litter);
   }
 
+  private originX = 1e9;
+  private originZ = 1e9;
+
+  /** flocks re-home around the player as they cross the city */
+  onChunkChange() {
+    const P = this.g.player.worldPos;
+    if (Math.hypot(P.x - this.originX, P.z - this.originZ) > 90) this.reset();
+  }
+
   reset() {
     const g = this.g;
     const dens = g.quality.p.ambient;
     this.pigeons = [];
-    // flocks near plazas, parks and food carts
-    const spots = [...g.street.carts.map((c) => ({ x: c.x + 2.5, z: c.z + 1.5 })), ...g.street.chatSpots.slice(0, 6), ...g.city.benches.slice(0, 6)];
+    const P = g.player.worldPos;
+    this.originX = P.x;
+    this.originZ = P.z;
+    // flocks near plazas, parks and food carts close to the player
+    const near = (s: { x: number; z: number }) => Math.hypot(s.x - P.x, s.z - P.z) < 120;
+    const spots = [...g.street.carts.map((c) => ({ x: c.x + 2.5, z: c.z + 1.5 })).filter(near), ...g.street.chatSpots.filter(near).slice(0, 8), ...g.city.benches.filter(near).slice(0, 8)];
     let n = 0;
     for (const s of spots) {
       if (n > 85 * dens) break;

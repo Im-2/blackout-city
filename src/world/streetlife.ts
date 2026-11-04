@@ -4,9 +4,9 @@ import * as THREE from 'three';
 import { PAL } from '../core/palette';
 import { Rng } from '../core/math';
 import { GeoBuilder } from './geo';
-import { worldMaterials } from './materials';
 import { BLOCKS, CURB_H, blockBounds, BANK_BLOCK } from './layout';
 import type { City } from './city';
+import { districtOfBlock } from '../map/districts';
 import type { Collision } from './collision';
 
 export interface Spot { x: number; z: number; heading: number; }
@@ -22,7 +22,7 @@ export class StreetLife {
   buskerSpots: Spot[] = [];
   guardSpots: Spot[] = [];
   group = new THREE.Group();
-  private g = new GeoBuilder();
+  private g!: GeoBuilder;
   private rng = new Rng(2024);
 
   constructor(private city: City, private col: Collision) {}
@@ -40,34 +40,29 @@ export class StreetLife {
         if (r.chance(0.18)) this.buskerSpots.push({ x: b.x0 + 2.4, z: b.z0 + 2.4, heading: Math.PI * 0.75 });
         if (r.chance(0.35)) this.vents.push({ x: b.x0 + L * r.range(0.2, 0.8), z: b.z0 - 3.5 });
         // bus stop on the south curb of every other block
-        if ((bi + bj) % 2 === 0 && !reserved(bi, bj)) this.busStop(b.x0 + L * 0.82, b.z1 - 1.2);
+        if ((bi + bj) % 2 === 0 && !reserved(bi, bj) && districtOfBlock(bi, bj) !== 'docks') this.busStop(b.x0 + L * 0.82, b.z1 - 1.2);
       }
     // ATMs beside some building doors
-    const doors = [...this.city.doors].sort(() => r.next() - 0.5).slice(0, 10);
+    const doors = [...this.city.doors].sort(() => r.next() - 0.5).slice(0, 34);
     for (const d of doors) this.atm(d);
     // cell towers (hackable: kills witness calls in range)
-    for (const [bi, bj] of [[0, 0], [4, 1], [2, 4], [5, 3]]) {
+    for (const [bi, bj] of [[3, 3], [7, 4], [5, 7], [8, 6], [1, 1], [10, 2], [1, 8], [10, 9], [6, 10], [5, 1]]) {
       const b = blockBounds(bi, bj);
       this.tower(b.x0 + 2.0, b.z1 - 2.0);
     }
     // tower guards at tall plinth doors
-    for (const d of this.city.doors.filter((_, i) => i % 9 === 0).slice(0, 6)) this.guardSpots.push({ x: d.x + Math.sin(d.heading) * 1.2 + Math.cos(d.heading) * 1.5, z: d.z + Math.cos(d.heading) * 1.2 - Math.sin(d.heading) * 1.5, heading: d.heading });
-    const mesh = new THREE.Mesh(this.g.build(), worldMaterials().props);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    this.group.add(mesh);
+    for (const d of this.city.doors.filter((_, i) => i % 9 === 0).slice(0, 14)) this.guardSpots.push({ x: d.x + Math.sin(d.heading) * 1.2 + Math.cos(d.heading) * 1.5, z: d.z + Math.cos(d.heading) * 1.2 - Math.sin(d.heading) * 1.5, heading: d.heading });
     // vent grates are flat decals
-    const vg = new GeoBuilder();
     for (const v of this.vents) {
+      const vg = this.city.propsAt(v.x, v.z);
       vg.box(v.x - 0.7, 0, v.z - 0.45, v.x + 0.7, 0.03, v.z + 0.45, { color: '#2a2a28' });
       for (let i = -0.55; i < 0.6; i += 0.22) vg.box(v.x + i, 0.03, v.z - 0.38, v.x + i + 0.1, 0.035, v.z + 0.38, { color: '#4a4844' });
     }
-    this.group.add(new THREE.Mesh(vg.build(), worldMaterials().props));
     return this;
   }
 
   private cart(x: number, z: number, heading: number) {
-    const g = this.g;
+    const g = (this.g = this.city.propsAt(x, z));
     const kind = this.rng.chance(0.5) ? 'food' : 'coffee';
     const body = kind === 'food' ? '#9b3b2f' : '#2f4a32';
     g.box(x - 1.1, CURB_H + 0.35, z - 0.55, x + 1.1, CURB_H + 1.15, z + 0.55, { color: body, shadeSides: true });
@@ -87,7 +82,7 @@ export class StreetLife {
     const fx = Math.sin(d.heading), fz = Math.cos(d.heading);
     const sx = Math.cos(d.heading), sz = -Math.sin(d.heading);
     const x = d.x - fx * 0.7 + sx * 2.4, z = d.z - fz * 0.7 + sz * 2.4;
-    const g = this.g;
+    const g = (this.g = this.city.propsAt(x, z));
     g.cbox(x, CURB_H + 0.9, z, Math.abs(fz) * 0.8 + Math.abs(fx) * 0.35, 1.8, Math.abs(fx) * 0.8 + Math.abs(fz) * 0.35, { color: '#5a5f64', shadeSides: true });
     g.cbox(x + fx * 0.18, CURB_H + 1.3, z + fz * 0.18, Math.abs(fz) * 0.5 + 0.02, 0.35, Math.abs(fx) * 0.5 + 0.02, { color: '#3a8a9a' });
     g.cbox(x + fx * 0.18, CURB_H + 1.75, z + fz * 0.18, Math.abs(fz) * 0.7 + 0.02, 0.12, Math.abs(fx) * 0.7 + 0.02, { color: PAL.cyan });
@@ -96,7 +91,7 @@ export class StreetLife {
   }
 
   private busStop(x: number, z: number) {
-    const g = this.g;
+    const g = (this.g = this.city.propsAt(x, z));
     g.box(x - 2.0, CURB_H, z - 0.1, x + 2.0, CURB_H + 2.5, z + 0.0, { color: '#6a7a80' });
     g.box(x - 2.1, CURB_H + 2.5, z - 0.8, x + 2.1, CURB_H + 2.62, z + 0.2, { color: '#3a3c3e' });
     for (const sx of [-1.95, 1.95]) g.cbox(x + sx, CURB_H + 1.25, z - 0.3, 0.1, 2.5, 0.1, { color: PAL.metal });
@@ -108,7 +103,7 @@ export class StreetLife {
   }
 
   private tower(x: number, z: number) {
-    const g = this.g;
+    const g = (this.g = this.city.propsAt(x, z));
     const H = 22;
     g.cbox(x, CURB_H + 0.3, z, 2.2, 0.6, 2.2, { color: '#7a766d' });
     for (let y = 0.6; y < H; y += 2) {

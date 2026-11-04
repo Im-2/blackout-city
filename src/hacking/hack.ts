@@ -65,7 +65,7 @@ export class HackSystem {
   private outlines: THREE.LineSegments[] = [];
   private icons: HTMLDivElement[] = [];
   private iconLayer: HTMLDivElement;
-  private carHackables = new Map<Vehicle, Hackable>();
+  private carHackables = new WeakMap<Vehicle, Hackable>();
   private v = new THREE.Vector3();
   private time = 0;
 
@@ -109,7 +109,7 @@ export class HackSystem {
             for (let k = 0; k < 3; k++) {
               if (cur.hasLight) g.signals.wave(cur.id, axis, dx, dz, 14 + k * 3);
               const ni = cur.i + dx, nj = cur.j + dz;
-              if (ni < 0 || nj < 0 || ni > 6 || nj > 6) break;
+              if (ni < 0 || nj < 0 || ni > BLOCKS || nj > BLOCKS) break;
               cur = g.city.graph.node(ni, nj);
             }
             return 'GREEN WAVE — RED FOR THE COPS BEHIND YOU';
@@ -237,7 +237,6 @@ export class HackSystem {
     const g = this.g;
     const c = g.city.blockCenter(block);
     this.addBlackout(c.x, c.z, PITCH * 0.62, 25 + this.g.save.data.upgrades.blackout * 8, block);
-    g.city.setBlockPower(block, false);
     // lamps die in a ripple from the power box
     for (const l of g.city.lamps) {
       if (l.block !== block || l.dead) continue;
@@ -256,7 +255,6 @@ export class HackSystem {
 
   private restoreBlock(block: number) {
     const g = this.g;
-    g.city.setBlockPower(block, true);
     for (const l of g.city.lamps) if (l.block === block && !l.dead) g.city.setLamp(l.index, true);
   }
 
