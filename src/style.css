@@ -413,3 +413,12 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
   .tc-btn { font-size: 13px; }
   .tc-btn.big { font-size: 15px; }
 }
+
+.mg { left: 50%; top: 38%; transform: translateX(-50%); width: min(420px, 60vw); padding: 8px 12px; border-top: 4px solid var(--cyan); }
+.mg.hit { background: rgba(70, 230, 255, 0.25); }
+.mg-bar { position: relative; height: 26px; margin: 6px 0; background: #0a0d12; border: 2px solid var(--line); }
+.mg-zone { position: absolute; top: 0; bottom: 0; background: #5aff8a; }
+.mg-cur { position: absolute; top: -4px; bottom: -4px; width: 5px; margin-left: -2px; background: #fff1d0; box-shadow: 0 0 0 1px #000; }
+.mg-info { display: flex; justify-content: space-between; font-size: 22px; color: #5aff8a; letter-spacing: 3px; }
+.mg-info em { font-style: normal; color: #fff1d0; letter-spacing: 0; }
+@media (max-height: 520px) { .mg { top: 26%; padding: 4px 8px; } .mg-bar { height: 20px; margin: 3px 0; } .mg-info { font-size: 16px; } }

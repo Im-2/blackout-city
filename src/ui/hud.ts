@@ -549,6 +549,14 @@ export class Hud {
       c.arc((g.police.heli.spotPos.x - P.x) * S, (g.police.heli.spotPos.z - P.z) * S, 13, 0, Math.PI * 2);
       c.stroke();
     }
+    // a route a mission wants you to see
+    if (g.routeLine) {
+      c.strokeStyle = 'rgba(255,138,58,0.75)';
+      c.lineWidth = 3 / zoom;
+      c.beginPath();
+      g.routeLine.forEach((p, i) => (i ? c.lineTo((p.x - P.x) * S, (p.z - P.z) * S) : c.moveTo((p.x - P.x) * S, (p.z - P.z) * S)));
+      c.stroke();
+    }
     // GPS route line
     const path = g.gps.path;
     if (path.length) {
@@ -572,10 +580,12 @@ export class Hud {
     const taken: [number, number, number][] = [];
     const toDraw: [number, number, () => void][] = [];
     const mapR = 88 / zoom;
+    // with this many missions only the nearest few pin to the edge
+    const pinned = new Set(this.miniList.filter((p) => p.pin && !(p.missionMarker && p.locked)).sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z)).slice(0, 6));
     for (const p of this.miniList) {
       if (p.missionMarker && (g.missions.run || (p.done && !p.pin))) continue;
       const far = Math.hypot(p.x - P.x, p.z - P.z) * S > mapR;
-      if (far && !p.pin) continue;
+      if (far && !pinned.has(p) && p.id !== 'home') continue;
       const [ix, iz] = pin(p.x, p.z);
       const scale = p.prio >= PRIO.home ? 0.72 : p.prio >= PRIO.activity ? 0.66 : 0.8;
       const r = ICON_R[p.icon] * scale + 2;

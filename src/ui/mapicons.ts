@@ -1,13 +1,13 @@
 // Map icons: every kind of place has its own silhouette as well as its colour, so
 // they read at a glance. Shared by the full map, the location list and the minimap.
 
-export type IconKind = 'diamond' | 'flag' | 'house' | 'bank' | 'shield' | 'tower' | 'circle' | 'coin' | 'garage' | 'ramp' | 'taxi' | 'metro' | 'wheel' | 'wheelpay' | 'police' | 'cluster';
+export type IconKind = 'diamond' | 'flag' | 'house' | 'bank' | 'shield' | 'tower' | 'circle' | 'coin' | 'garage' | 'ramp' | 'taxi' | 'metro' | 'wheel' | 'wheelpay' | 'police' | 'cluster' | 'truck' | 'getaway' | 'eye' | 'bolt' | 'rarecar';
 
 const INK = '#0a1218', EDGE = '#0f141c';
 
 /** half-size in pixels at scale 1: bigger means more important */
 export const ICON_R: Record<IconKind, number> = {
-  diamond: 14, flag: 13, house: 13, bank: 12, shield: 12, tower: 11, ramp: 11, circle: 9, coin: 9, garage: 8, taxi: 6, metro: 6, wheel: 6, wheelpay: 6, police: 5, cluster: 10,
+  diamond: 14, flag: 13, house: 13, bank: 12, shield: 12, tower: 11, ramp: 11, circle: 9, coin: 9, garage: 8, taxi: 6, metro: 6, wheel: 6, wheelpay: 6, police: 5, cluster: 10, truck: 13, getaway: 13, eye: 13, bolt: 12, rarecar: 8,
 };
 
 function poly(c: CanvasRenderingContext2D, pts: number[][], x: number, y: number, r: number, offset = 0) {
@@ -27,6 +27,15 @@ const SHAPE: Partial<Record<IconKind, number[][]>> = {
   ramp: [[-1, 0.75], [1, -0.75], [1, 0.75]],
   metro: [[-1, -0.8], [1, -0.8], [0, 1]],
   tower: [[-0.45, -1], [0.45, -1], [0.45, 1], [-0.45, 1]],
+  // an armored truck from the side
+  truck: [[-1, -0.7], [0.4, -0.7], [0.4, -0.25], [1, -0.25], [1, 0.75], [-1, 0.75]],
+  // a car from the side
+  getaway: [[-1, 0.05], [-0.55, 0.05], [-0.3, -0.6], [0.45, -0.6], [0.7, 0.05], [1, 0.05], [1, 0.7], [-1, 0.7]],
+  rarecar: [[-1, 0.05], [-0.55, 0.05], [-0.3, -0.6], [0.45, -0.6], [0.7, 0.05], [1, 0.05], [1, 0.7], [-1, 0.7]],
+  // an eye
+  eye: [[-1, 0], [-0.5, -0.5], [0.5, -0.5], [1, 0], [0.5, 0.5], [-0.5, 0.5]],
+  // a lightning bolt
+  bolt: [[0.2, -1], [-0.7, 0.15], [-0.1, 0.15], [-0.25, 1], [0.7, -0.2], [0.05, -0.2]],
 };
 
 /** draws centred on (x, y). `s` scales it; `glow` adds a selection ring. */
@@ -97,6 +106,16 @@ export function drawIcon(c: CanvasRenderingContext2D, kind: IconKind, x: number,
     c.fillRect(x - r, y - r * 0.6, r, r * 1.2);
     c.fillStyle = color === '#e0322a' ? '#2b5ce0' : '#e0322a';
     c.fillRect(x, y - r * 0.6, r, r * 1.2);
+  }
+  if (kind === 'truck' || kind === 'getaway') {
+    c.fillStyle = INK;
+    for (const k of [-0.55, 0.55]) { c.beginPath(); c.arc(x + k * r, y + r * 0.72, r * 0.24, 0, Math.PI * 2); c.fill(); }
+  }
+  if (kind === 'eye') {
+    c.fillStyle = INK;
+    c.beginPath();
+    c.arc(x, y, r * 0.32, 0, Math.PI * 2);
+    c.fill();
   }
   if (tag && (kind === 'diamond' || kind === 'circle' || kind === 'garage' || kind === 'coin' || kind === 'cluster')) {
     c.fillStyle = INK;

@@ -22,6 +22,8 @@ export function touchText(s: string) {
   if (!device.touch) return s;
   return s
     .replace(/\[E\]\s*/g, '')
+    .replace(/Hold Q: right-click a light ahead for ALL RED/g, 'Hold HACK: ALT on a light ahead for ALL RED')
+    .replace(/Hold Q/g, 'Hold HACK')
     .replace(/F \+ W or S/g, 'TRICK + GAS or BRAKE')
     .replace(/F \+ S/g, 'TRICK + BRAKE')
     .replace(/[Hh]old F/g, 'hold TRICK')

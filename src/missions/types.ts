@@ -3,7 +3,7 @@ import type * as THREE from 'three';
 import type { Game } from '../core/game';
 import type { District } from '../map/districts';
 
-export type MissionType = 'heist' | 'hacker' | 'driving' | 'courier' | 'race' | 'side' | 'stunt' | 'bike';
+export type MissionType = 'heist' | 'hacker' | 'driving' | 'courier' | 'race' | 'side' | 'stunt' | 'bike' | 'intercept' | 'getaway' | 'tail' | 'prank' | 'rare';
 
 export const TYPE_INFO: Record<MissionType, { label: string; color: string; tag: string }> = {
   heist: { label: 'Heist', color: '#e0322a', tag: 'H' },
@@ -14,6 +14,11 @@ export const TYPE_INFO: Record<MissionType, { label: string; color: string; tag:
   side: { label: 'Side activity', color: '#c9c8a8', tag: 'S' },
   stunt: { label: 'Stunts', color: '#b6ff3a', tag: 'T' },
   bike: { label: 'Bikes', color: '#b48cff', tag: 'B' },
+  intercept: { label: 'Intercept', color: '#ff8a3a', tag: 'A' },
+  getaway: { label: 'Getaway', color: '#ffd24a', tag: 'G' },
+  tail: { label: 'Surveillance', color: '#9fe8ff', tag: 'E' },
+  prank: { label: 'Prank', color: '#ff7ab8', tag: 'P' },
+  rare: { label: 'Rare car', color: '#e6c84a', tag: '?' },
 };
 
 /** Handed to every mission script. `vars` is per-attempt scratch space. */
@@ -47,6 +52,10 @@ export interface MissionDef {
   giver: string;
   district: District;
   type: MissionType;
+  /** map icon, if not the default diamond */
+  icon?: import('../ui/mapicons').IconKind;
+  /** LOCATIONS tab, if not MISSIONS */
+  category?: 'mission' | 'activity';
   /** the marker you walk or drive into */
   marker: { x: number; z: number; heading?: number };
   intro: string;

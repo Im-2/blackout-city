@@ -63,8 +63,8 @@ export class Places {
       const st = g.missions.status(d), t = TYPE_INFO[d.type], rec = g.save.data.completed[d.id];
       const active = run === d.id;
       out.push(base({
-        id: d.id, name: d.title, desc: d.intro, category: d.type === 'race' ? 'race' : 'mission',
-        icon: d.type === 'race' ? 'flag' : 'diamond', color: st === 'locked' ? '#6a6f78' : t.color, tag: t.tag,
+        id: d.id, name: d.title, desc: d.intro, category: d.type === 'race' ? 'race' : d.category ?? 'mission',
+        icon: d.icon ?? (d.type === 'race' ? 'flag' : 'diamond'), color: st === 'locked' ? '#6a6f78' : t.color, tag: t.tag,
         prio: active ? PRIO.active : d.type === 'race' ? PRIO.race : PRIO.mission,
         x: d.marker.x, z: d.marker.z, district: DISTRICTS[d.district].name,
         status: active ? 'In progress' : st === 'locked' ? `Locked: ${d.unlock?.hint ?? ''}` : rec ? `Completed ×${rec.n}` : 'Available',

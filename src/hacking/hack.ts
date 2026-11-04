@@ -289,7 +289,7 @@ export class HackSystem {
     const g = this.g;
     this.time += realDt;
     const inp = g.input;
-    const want = (inp.held('hack') && g.state === 'playing' && !g.player.busted);
+    const want = (inp.held('hack') && g.state === 'playing' && !g.player.busted && !g.minigame.active);
     if (want && !this.active) g.audio.hackOn();
     this.active = want;
     this.blend = damp(this.blend, this.active ? 1 : 0, 10, realDt);

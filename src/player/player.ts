@@ -105,7 +105,7 @@ export class Player {
     const g = this.g;
     const inp = g.input;
     if (g.travel.open || (g.fading && !this.vehicle)) { this.view.update(dt, 'idle', 0); return; }
-    if (g.missions.card || g.races.frozen) {
+    if (g.missions.card || g.races.frozen || g.minigame.active) {
       // hold still for the intro card
       const v = this.vehicle;
       if (v) { v.throttle = 0; v.steer = 0; v.handbrake = true; }

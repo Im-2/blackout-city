@@ -218,6 +218,7 @@ export class TouchControls {
   // ------------------------------------------------------------------ what the buttons are right now
   private buttons(): Btn[] {
     const g = this.g, p = g.player, v = p.vehicle;
+    if (g.minigame.active) return [{ id: 'tap', label: 'HIT', a: 'interact', r: 0, c: 0, big: true, hot: true }];
     if (g.missions.card) return [{ id: 'start', label: 'START', a: 'interact', r: 0, c: 0, big: true, hot: true }, { id: 'no', label: 'NOT NOW', a: 'back', r: 0, c: 1 }];
     if (g.travel.open) return [{ id: 'go', label: 'GO', a: 'confirm', r: 0, c: 0, big: true, hot: true }, { id: 'dn', label: '▼', a: 'menuDown', r: 0, c: 1 }, { id: 'up', label: '▲', a: 'menuUp', r: 1, c: 1 }, { id: 'x', label: 'CLOSE', a: 'back', r: 1, c: 0 }];
     if (g.jobs.phoneOpen) return [{ id: 'take', label: 'TAKE', a: 'confirm', r: 0, c: 0, big: true, hot: true }, { id: 'next', label: 'NEXT', a: 'phone', r: 0, c: 1 }, { id: 'x', label: 'CLOSE', a: 'back', r: 1, c: 0 }];
