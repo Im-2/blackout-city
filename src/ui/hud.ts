@@ -179,6 +179,7 @@ export class Hud {
       <div class="credits">Every texture, model and sound is generated in code.</div>`) as HTMLDivElement;
     this.screens.pause = h('div', 'screen pause', `
       <div class="logo">PAUSED</div>
+      <div class="p-progress"></div>
       <button class="btn resume">RESUME</button>
       <button class="btn map">MAP (M)</button>
       <button class="btn restart">RETRY MISSION (R)</button>

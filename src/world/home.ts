@@ -13,6 +13,7 @@ import { hexToRgb, damp } from '../core/math';
 import { PAL } from '../core/palette';
 import { Vehicle } from '../vehicles/vehicle';
 import { CarKind } from '../vehicles/carMesh';
+import { RARES } from '../activities/collection';
 import type { Buildings, Site } from './buildings';
 import type { Game } from '../core/game';
 import type { OwnedVehicle } from '../save/save';
@@ -502,7 +503,7 @@ export class Home {
       { pos: new THREE.Vector3(-34.2, F, 38), radius: 1.3, label: 'Door to the garage', enabled: () => !g.player.vehicle, action: () => { g.audio.door(); g.fadeTeleport(-36.1, F, 38, -Math.PI / 2, ''); } },
       { get label() { return g.police.heat > 0 ? 'Bed: too hot to sleep (lose the heat first)' : g.missions.run ? 'Bed: finish your mission first' : 'Sleep: save game, skip 8 hours'; }, pos: new THREE.Vector3(-32.6, F, 30.6), radius: 1.5, enabled: () => true, action: () => this.sleep() },
       { pos: new THREE.Vector3(-27, F, 30.6), radius: 1.5, label: 'Wardrobe: change outfit', enabled: () => true, action: () => ui().open(['wardrobe'], 'WARDROBE') },
-      { pos: new THREE.Vector3(-15.75, F, 30.5), radius: 1.5, label: 'Hacker desk', enabled: () => true, action: () => ui().open(['missions', 'map', 'collection', 'rep', 'records', 'upgrades'], 'HACKER DESK') },
+      { pos: new THREE.Vector3(-15.75, F, 30.5), radius: 1.5, label: 'Hacker desk', enabled: () => true, action: () => ui().open(['missions', 'map', 'gallery', 'collection', 'rep', 'records', 'upgrades'], 'HACKER DESK') },
       { get label() { const v = g.loot.carriedValue; return v ? `Stash your loot ($${v.toLocaleString()})` : `Open the stash (${g.save.data.stash.length})`; }, pos: new THREE.Vector3(-33.3, F, 40.45), radius: 1.2, enabled: () => true, action: () => { if (g.loot.carriedValue) { g.loot.stashAll(); this.refreshDisplays(); } else ui().open(['stash'], 'STASH'); } },
       { pos: new THREE.Vector3(-33.6, F, 42.6), radius: 1.3, label: 'Trophy shelf', enabled: () => true, action: () => ui().open(['trophies'], 'TROPHIES') },
       { pos: new THREE.Vector3(-13.6, F, 43), radius: 1.2, label: 'Make coffee', enabled: () => g.hack.energy < 100, action: () => { g.hack.energy = 100; g.audio.pop(); g.hud.toast('COFFEE. HACK ENERGY FULL', 'cool'); } },
@@ -598,10 +599,10 @@ export class Home {
     if (v.wrecked) { g.hud.toast('TOO WRECKED TO KEEP', 'dim'); g.audio.deny(); return; }
     const s = g.save.data;
     const known = s.ownedVehicles.some((o) => o.kind === v.kind && o.color === v.color);
-    const entry: OwnedVehicle = { kind: v.kind, color: v.color, label: `${g.news.colorName(v.color)} ${v.label.toLowerCase()}` };
+    const entry: OwnedVehicle = { kind: v.kind, color: v.color, label: RARES.find((r) => r.id === v.rareId)?.name ?? `${g.news.colorName(v.color)} ${v.label.toLowerCase()}` };
     if (!known) s.ownedVehicles.push(entry);
     s.garage = entry;
-    g.fadeTeleport(-37, F, 40, Math.PI, known ? 'PARKED' : `NEW IN THE COLLECTION: ${entry.label.toUpperCase()} (${s.ownedVehicles.length})`, () => {
+    g.fadeTeleport(-37, F, 40, Math.PI, known || v.rareId ? 'PARKED' : `NEW IN THE COLLECTION: ${entry.label.toUpperCase()} (${s.ownedVehicles.length})`, () => {
       g.player.exitVehicle(true);
       if (this.car && this.car !== v) g.removeVehicle(this.car);
       const i = g.parked.indexOf(v);
@@ -610,6 +611,7 @@ export class Home {
       v.handbrake = true;
       v.locked = false;
       this.car = v;
+      g.collection.onPark(v);
       this.refreshDisplays();
     });
     g.audio.unlock();

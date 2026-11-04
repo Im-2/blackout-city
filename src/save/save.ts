@@ -28,6 +28,10 @@ export interface SaveData {
   crimes: Record<string, number>;
   /** shopkeepers you've locked in, and how many times */
   grudges: Record<string, number>;
+  /** rare cars parked at home, spotted, and set rewards paid */
+  rare: Record<string, boolean>;
+  rareSeen: Record<string, boolean>;
+  rareSets: Record<string, boolean>;
   /** clip tool: every mission open */
   unlockAll: boolean;
 }
@@ -51,6 +55,9 @@ const fresh = (): SaveData => ({
   seen: {},
   crimes: {},
   grudges: {},
+  rare: {},
+  rareSeen: {},
+  rareSets: {},
   unlockAll: false,
 });
 

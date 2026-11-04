@@ -98,6 +98,8 @@ export class Vehicle {
   wet = 0;
   isEmergency: boolean;
   private lean = 0;
+  /** one of the collectable rare cars */
+  rareId?: string;
   /** rent instead of stealing (price in $) */
   rental?: number;
   /** two-wheelers: 1 = lean back for a wheelie, -1 = lean forward for a stoppie */

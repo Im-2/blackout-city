@@ -57,6 +57,7 @@ import { TruckJob } from '../activities/truck';
 import { GetawayJob } from '../activities/getaway';
 import { TailJob } from '../activities/tail';
 import { Pranks } from '../activities/pranks';
+import { Collection } from '../activities/collection';
 import { TouchControls } from '../ui/touch';
 import { device } from './device';
 import { Home } from '../world/home';
@@ -125,6 +126,7 @@ export class Game {
   getaway!: GetawayJob;
   tail!: TailJob;
   pranks!: Pranks;
+  collection!: Collection;
   /** a route the current mission wants drawn on the maps */
   routeLine: { x: number; z: number }[] | null = null;
   touch: TouchControls | null = null;
@@ -234,6 +236,7 @@ export class Game {
     this.getaway = new GetawayJob(this);
     this.tail = new TailJob(this);
     this.pranks = new Pranks(this);
+    this.collection = new Collection(this).build();
     this.gps = new Gps(this);
     this.missions = new Missions(this);
     this.map = new FullMap(this);
@@ -316,6 +319,7 @@ export class Game {
     if (this.state !== 'playing') return;
     this.state = 'paused';
     this.hud.show('pause');
+    (this.hud.screens.pause.querySelector('.p-progress') as HTMLElement).textContent = this.collection.progress;
   }
 
   resume() {
@@ -403,6 +407,7 @@ export class Game {
     this.home.onWorldReset();
     this.bikes.reset();
     this.tricks.reset();
+    this.collection.reset();
     this.rep.reset();
     this.home.refreshDisplays();
 
@@ -657,6 +662,7 @@ export class Game {
     this.getaway.update(dt);
     this.tail.update(dt);
     this.pranks.update(dt);
+    this.collection.update(dt);
     this.minigame.update(realDt);
     this.missions.update(dt);
     this.tricks.update(dt);

@@ -6,16 +6,17 @@ import { OUTFITS } from '../player/disguise';
 import { UPGRADES } from '../core/economy';
 import { Races } from '../activities/races';
 import { BILLBOARD_PRESETS, cleanMessage } from '../activities/pranks';
+import { RARE_SETS } from '../activities/collection';
 import { repTitle } from '../reputation/reputation';
 import type { Game } from '../core/game';
 
-export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies' | 'records' | 'billboard';
+export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies' | 'records' | 'billboard' | 'gallery';
 
 interface Row { left: string; right?: string; sub?: string; color?: string; act?: () => void; bar?: number; input?: boolean; }
 
 const TAB_NAMES: Record<HomeTab, string> = {
   missions: 'MISSIONS', map: 'MAP', collection: 'COLLECTION', rep: 'REPUTATION', upgrades: 'UPGRADES',
-  wardrobe: 'OUTFITS', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS', billboard: 'MESSAGE',
+  wardrobe: 'OUTFITS', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS', billboard: 'MESSAGE', gallery: 'GALLERY',
 };
 
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -107,6 +108,23 @@ export class HomeUi {
           } },
           ...BILLBOARD_PRESETS.map((m) => ({ left: m, color: '#46e6ff', act: () => post(m, false) })),
         ];
+      }
+      case 'gallery': {
+        const C = g.collection;
+        const rows: Row[] = [{ left: C.progress, right: C.setsDone === RARE_SETS.length ? 'COMPLETE' : '', color: '#e6c84a', bar: C.count / C.total }];
+        for (const set of RARE_SETS) {
+          const cars = C.setCars(set.id), have = cars.filter((c) => C.owned(c.id)).length;
+          rows.push({ left: `SET: ${set.name}`, right: C.setDone(set.id) ? 'PAID' : `${have}/${cars.length} · $${set.cash.toLocaleString()}`, color: '#ffd24a' });
+          for (const c of cars) {
+            const own = C.owned(c.id);
+            rows.push({
+              left: own || s.rareSeen[c.id] ? c.name : '? ? ?', right: own ? 'OWNED' : s.rareSeen[c.id] ? 'SPOTTED' : 'MISSING',
+              sub: own ? `${DISTRICTS[c.district].name}` : c.hint, color: own ? c.color : '#6a6f78',
+              act: own ? undefined : () => { const at = C.mapPos(c); g.gps.setWaypoint(at.x, at.z); g.hud.toast(`GPS SET: ${DISTRICTS[c.district].name.toUpperCase()}`, 'hack'); this.close(); },
+            });
+          }
+        }
+        return rows;
       }
       case 'missions':
         return g.missions.defs.map((d) => {

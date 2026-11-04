@@ -97,6 +97,12 @@ src/
     stunts.ts             ramps, Stunt Park, Long Jump, Shore Leap
     tricks.ts             trick scoring, combo multiplier, HUD feed
     races.ts              race defs (built into missions), rivals, position, prizes
+    route.ts              drivable lines through the road graph, kerb spots, route following
+    truck.ts              armored truck intercept
+    getaway.ts            getaway driver jobs + crew in the car
+    tail.ts               surveillance: tailing a target on foot, phone hack, leads
+    pranks.ts             billboard messages + filter, scored prank missions
+    collection.ts         rare cars, sets, set rewards
   reputation/reputation.ts rep per district + overall, tiers, shop + ped reactions
   save/records.ts         local best trick scores + race times (written at once)
   save/save.ts            localStorage save: cash, stash, outfits, upgrades, escapes, missions, rep, vehicles
@@ -109,7 +115,8 @@ src/
   map/places.ts           every place on the map in one list: icon, colour, priority, status
   ui/mapicons.ts          the icon shapes, shared by full map, location list, minimap
   ui/fullmap.ts           full map (M): decluttered markers + LOCATIONS panel, waypoint
-  ui/homeui.ts            home screens: hacker desk tabs, wardrobe, stash, trophies
+  ui/homeui.ts            home screens: hacker desk tabs, gallery, wardrobe, stash, trophies, billboard text
+  ui/minigame.ts          the timed hit-the-green minigame (E, Enter, click or tap)
   ui/news.ts              radio lines + billboard ticker
   audio/audio.ts          WebAudio synth (engine, siren, hacks, ambience)
   debug/debug.ts          clip/debug keys, ?clip mode
@@ -180,6 +187,16 @@ assets/                   reference art (not shipped) + optional models/
 - **Map declutter (`FullMap.buildLayout`, runs each draw):** places at shop priority or below merge when within 25 px into a count badge; click or zoom to split. Everything then places in priority order: a marker that would touch one already placed (or the player arrow) moves to the nearest free spot, with a thin leader line and a dot at its true position. Icon scale grows 0.85 to 1.3 with zoom. District names are drawn faint behind markers. The tooltip picks whichever side covers the fewest markers. `g.map.layout` is public so tests can check overlaps.
 - **LOCATIONS panel:** beside the map, and the map's width shrinks to fit. Tabs ALL / MISSIONS / RACES / ACTIVITIES / SHOPS / SERVICES (←→), search, sort near/type, ↑↓ moves the selection, Enter or double-click toggles GPS, click flies the map there. Bank and police station count as SERVICES. A mission's waypoint still loses to the mission target (`g.missionTarget`). `Input` ignores keys typed into text boxes.
 - **Minimap:** same icons and priority. Places draw most important first; anything landing on one already drawn is skipped, minor ones only show in range, only missions, races, home and Stunt Park pin to the edge. No labels.
+
+## Remaining activities
+Everything below is a `MissionDef` (or a place), so markers, map, minimap, LOCATIONS, cards, GPS, fail, retry and save come for free. A mission's `icon` and `category` choose its map shape and tab. New types: `intercept`, `getaway`, `tail`, `prank`, `rare`. `g.routeLine` draws a dashed route on both maps. With 30+ markers only the nearest six pin to the minimap edge.
+- **Minigame (`ui/minigame.ts`):** a cursor sweeps a bar, hit the green. A miss costs 2 s. The world keeps running and the player stands still. Touch gets a HIT button. Used for the truck door and phone hacks. There is no separate "lockpick" or "trace" game: lock-picking is hold-to-pick.
+- **Cash in Transit (`truck.ts`):** the truck is a repainted `swat` with driver `racer`, so it can't be stolen and doesn't count as police. It ignores normal lights and stops only for a hacked red (`override` + red for its axis) or a road barrier (two hackable, on its route). Four routes, a different one each attempt, joined about 130 m from you. It holds 26 s once stopped, then drives on unless the door is being cracked. Dispatch calls at 38 s (heat 2). Grabbing the crates = heat 3, +1 every 18 s up to 4 while they can see you. Pays when heat reaches 0: $6,000 + up to $1,500 for speed + $3,000 with the Banker lead. Reaching the end of the route fails it. The older fixer-phone armored job is still there, separately.
+- **Getaway (`getaway.ts`):** Diamond Dash (Gems & Co), Payroll Run (Docks), The Vantage Job (Tower; locked behind Shadow the Courier). Default: any car counts as yours, bikes don't fit. Swap cars and the crew get out, run over and get in. The drop refuses while police saw you in the last 2.5 s. Score /100: speed 40 (par time per job), damage 30, heat lost 30. Pay = base × (0.5 + score/100). Ranks S 85, A 65, B 45.
+- **Tailing (`tail.ts`):** band 5–42 m. Seeing you takes 2.5 s up close, 9 s at 22 m, faster from a car. It needs line of sight, the view cone (±60°) and no cover: two peds within 3 m of you is cover, and a blackout counts too. The target stops for 1.2 s (a warning) then looks back for 2.8 s every 9–15 s. Under 5 m also fills the meter. Past 42 m for 7 s = lost. The target walks through small props, like normal walkers. Leads: Shadow the Courier unlocks The Vantage Job and The Banker's Lunch; The Banker's Lunch adds $3,000 to truck jobs.
+- **Pranks (`pranks.ts`):** hacking any billboard opens a message menu (`HomeTab` `billboard`), 40 s on screen. Custom text is 24 chars, plain characters, checked against `BLOCKED` with leet-speak folded. It's a basic filter: it won't catch everything, and presets are the safe route. Hackable kind `prank`: Mart 24 and Pawn & Loan doors (7 s, people inside put their hands up and complain) and the Vantage lift (8 s). `save.grudges` makes the clerk bring it up next visit. Scored: Prime Time (3 billboards, custom text scores more), Disco Junction (5 lights on Union Blvd in a colour pattern, wrong colour -100), Car Alarm Concert (6 cars on Mill St, on the beat 300, off 100, 4 to pass). Time left adds points. Best scores in `Records.pranks`. No heat from pranks.
+- **Rare cars (`collection.ts`):** 9 cars in 3 sets (`RARES`, `RARE_SETS`), each snapped to the nearest `city.parking` spot. Before you've been within 70 m, the map shows only a rough spot and the LOCATIONS row says which district. Parking at home (`home.park` calls `collection.onPark`) owns it. Sets pay $4,000–6,000, all nine another $15,000. Abandoned or wrecked ones go back to their spot once you're 175 m away. Progress on the pause screen, the LOCATIONS panel and the desk's GALLERY tab, where a row sets GPS.
+- **Perf:** compared with `c7ddb5d` at the same spot, heat 3: about +8 draw calls (154 vs 146 on LOW, shadows off that frame), frame times the same within noise. Absolute numbers from the hidden browser pane (about 30 ms on LOW) are too slow to judge 60 fps.
 
 ## Mobile
 - **Device (`core/device.ts`):** `device.touch` = touch-capable and coarse pointer (touchscreen laptops stay on keyboard); `device.mobile` adds the phone/tablet settings; `lowEnd` = deviceMemory ≤ 3 or ≤ 4 cores. Test URLs: `?touch` forces touch + mobile, `?mobile` mobile only, `?desktop` neither. In the browser pane, a viewport under 768 wide also emulates touch (740×360 works).

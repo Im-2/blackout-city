@@ -29,6 +29,15 @@ export class Activities {
     this.spots.push(s);
   }
 
+  /** a card that isn't tied to a fixed spot */
+  showCard(s: { name: string; type: MissionType; intro: string }) {
+    const g = this.g;
+    if (g.missions.run || g.missions.card) return;
+    g.hud.infoCard(s);
+    g.audio.ring();
+    this.cardT = CARD_TIME;
+  }
+
   iconColor(s: ActivitySpot) { return TYPE_INFO[s.type].color; }
   iconTag(s: ActivitySpot) { return s.tag ?? TYPE_INFO[s.type].tag; }
 

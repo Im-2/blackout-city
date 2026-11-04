@@ -438,3 +438,11 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
 .hu-input { display: block; width: 100%; box-sizing: border-box; margin-top: 3px; font: inherit; background: #0a0d12; color: #fff1d0; border: 2px solid var(--line); padding: 1px 6px; outline: none; text-transform: uppercase; pointer-events: auto; user-select: text; -webkit-user-select: text; }
 .hu-input:focus { border-color: var(--cyan); }
 @media (max-height: 520px) { .prank-hud { top: 48px; padding: 1px 10px; } }
+
+.p-progress { font-size: 22px; color: #e6c84a; letter-spacing: 2px; text-shadow: 2px 2px 0 #000; }
+.ms-progress { font-size: 15px; color: #e6c84a; padding: 2px 12px 0; letter-spacing: 1px; }
+@media (max-height: 520px) { .p-progress { flex-basis: 100%; font-size: 15px; } .ms-progress { font-size: 11px; padding: 1px 8px 0; } }
+@media (max-height: 520px) {
+  .tail-hud { left: auto; right: 6px; top: 52px; transform: none; width: 180px; }
+  #ui.touch .hintbox { top: auto; bottom: 34px; right: auto; left: 8px; max-width: 42vw; }
+}

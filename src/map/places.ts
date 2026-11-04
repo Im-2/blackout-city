@@ -2,6 +2,7 @@
 // how important it is. The full map, the LOCATIONS panel and the minimap all read this.
 import { TYPE_INFO } from '../missions/types';
 import { DISTRICTS, districtAt } from './districts';
+import { RARES } from '../activities/collection';
 import type { IconKind } from '../ui/mapicons';
 import type { Game } from '../core/game';
 
@@ -78,6 +79,15 @@ export class Places {
         id: s.id, name: s.name, desc: s.intro, category: bike ? 'service' : 'activity',
         icon: bike ? (s.tag === '$' ? 'wheelpay' : 'wheel') : 'ramp', color: g.activities.iconColor(s), tag: s.tag,
         prio: bike ? PRIO.minor : PRIO.activity, x: s.x, z: s.z, pin: !!s.pin,
+      }));
+    }
+    for (const r of RARES) {
+      const own = g.collection.owned(r.id), at = g.collection.mapPos(r);
+      out.push(base({
+        id: `rare-${r.id}`, name: own || at.known ? r.name : 'Rare car: unknown', desc: r.hint, category: 'activity', icon: 'rarecar',
+        color: own ? '#6a6f78' : '#e6c84a', prio: PRIO.garage, x: at.x, z: at.z, district: DISTRICTS[r.district].name,
+        status: own ? 'In your collection' : at.known ? 'Spotted: steal it, park it at home' : `Missing: somewhere in ${DISTRICTS[r.district].name}`,
+        done: own, missionMarker: own,
       }));
     }
     g.travel.stands.forEach((s, i) => out.push(base({ id: `taxi-${i}`, name: `Taxi: ${s.name}`, desc: 'E at the stand to fast travel. $50, free if you\'re broke. Refused while heat is above 0.', category: 'service', icon: 'taxi', color: '#d8b84a', prio: PRIO.minor, x: s.x, z: s.z })));

@@ -189,6 +189,7 @@ export class FullMap {
     const s = this.side;
     s.innerHTML = `
       <div class="ms-head">LOCATIONS<button class="ms-close">✕</button></div>
+      <div class="ms-progress"></div>
       <div class="ms-tabs"></div>
       <div class="ms-tools"><input class="ms-search" placeholder="SEARCH" spellcheck="false"/><button class="ms-sort"></button><button class="ms-key">KEY</button></div>
       <div class="ms-list" tabindex="0"></div>
@@ -236,6 +237,7 @@ export class FullMap {
   private renderList() {
     this.shown = this.filtered();
     for (const b of Array.from(this.tabsEl.children) as HTMLElement[]) b.classList.toggle('on', b.dataset.f === this.filter);
+    (this.side.querySelector('.ms-progress') as HTMLElement).textContent = this.g.collection.progress;
     this.sortEl.textContent = this.sortBy === 'distance' ? 'SORT: NEAR' : 'SORT: TYPE';
     this.listEl.innerHTML = this.shown.length ? this.shown.map((p) => {
       const gps = this.isGps(p);
