@@ -6,6 +6,7 @@ import { DISTRICTS, districtOfBlock } from '../map/districts';
 import { TYPE_INFO, MissionDef } from '../missions/types';
 import type { Missions } from '../missions/missions';
 import { repTitle } from '../reputation/reputation';
+import { device, touchText } from '../core/device';
 import { drawIcon, ICON_R } from './mapicons';
 import { PRIO, Place } from '../map/places';
 import type { Game } from '../core/game';
@@ -133,7 +134,7 @@ export class Hud {
       this.cdEls[k] = c;
       cds.appendChild(c);
     }
-    en.append(this.energyText, bar, cds, h('div', 'hint-q', 'HOLD <b>Q</b> TO HACK'));
+    en.append(this.energyText, bar, cds, h('div', 'hint-q', device.touch ? '' : 'HOLD <b>Q</b> TO HACK'));
     this.hudLayer.appendChild(en);
 
     this.speedEl = h('div', 'panel speed') as HTMLDivElement;
@@ -174,7 +175,7 @@ export class Hud {
       <div class="tagline">CUT THE POWER. ROB THE CITY.</div>
       <button class="btn start">NEW GAME</button>
       <button class="btn newgame">NEW GAME</button>
-      ${CONTROLS}
+      ${device.touch ? '<button class="btn ctl">CONTROLS</button>' : CONTROLS}
       <div class="credits">Every texture, model and sound is generated in code.</div>`) as HTMLDivElement;
     this.screens.pause = h('div', 'screen pause', `
       <div class="logo">PAUSED</div>
@@ -185,7 +186,7 @@ export class Hud {
       <button class="btn mute">MUTE (Z)</button>
       <button class="btn newgame">NEW GAME</button>
       <button class="btn forget">CLEAR POLICE ROUTE MEMORY</button>
-      ${CONTROLS}`) as HTMLDivElement;
+      ${device.touch ? '<button class="btn ctl">CONTROLS</button>' : CONTROLS}`) as HTMLDivElement;
     this.screens.results = h('div', 'screen results', '') as HTMLDivElement;
     for (const s of Object.values(this.screens)) { s.style.display = 'none'; this.root.appendChild(s); }
   }
@@ -201,6 +202,7 @@ export class Hud {
   }
 
   toast(text: string, kind: 'hack' | 'heat' | 'cool' | 'dim' | 'win' = 'hack') {
+    text = touchText(text);
     for (const c of Array.from(this.toasts.children)) if (c.innerHTML === text && !c.classList.contains('out')) return; // no duplicate spam
     const t = h('div', `toast ${kind}`, text);
     this.toasts.appendChild(t);
@@ -223,7 +225,7 @@ export class Hud {
   }
 
   hint(text: string) {
-    this.hintEl.innerHTML = `<span class="eye">◉</span> ${text}`;
+    this.hintEl.innerHTML = `<span class="eye">◉</span> ${touchText(text)}`;
     this.hintEl.classList.add('on');
     this.hintT = 6;
   }
@@ -249,7 +251,7 @@ export class Hud {
       <div class="c-title">${d.title}</div>
       <div class="c-giver">${d.giver}</div>
       <div class="c-intro">${d.intro}</div>
-      <div class="label">[E] START · [BACKSPACE] NOT NOW</div>`;
+      ${device.touch ? '' : '<div class="label">[E] START · [BACKSPACE] NOT NOW</div>'}`;
   }
 
   /** a first-visit card for an activity spot (it doesn't stop you) */
@@ -260,7 +262,7 @@ export class Hud {
     this.cardEl.innerHTML = `
       <div class="label" style="color:${t.color}">${t.label}</div>
       <div class="c-title">${s.name}</div>
-      <div class="c-intro">${s.intro}</div>`;
+      <div class="c-intro">${touchText(s.intro)}</div>`;
   }
 
   /** somebody talking to you, in the radio slot */
@@ -355,7 +357,7 @@ export class Hud {
 
     // prompt
     const label = g.hack.active || g.travel.open ? '' : v && g.carAction ? g.carAction.label : p.pick > 0 ? `PICKING LOCK ${'█'.repeat(Math.round(p.pick * 10))}${'░'.repeat(10 - Math.round(p.pick * 10))}` : p.focusLabel;
-    this.prompt.textContent = label ? `[E] ${label}` : v && v.speedAbs < 6 ? '' : '';
+    this.prompt.textContent = label ? touchText(`[E] ${label}`) : '';
     this.prompt.style.display = label ? 'block' : 'none';
 
     this.updateMissionPanels(g);
@@ -412,7 +414,7 @@ export class Hud {
     const carried = g.loot.carriedValue;
     this.set(this.moneyEl, 'money', `$${g.loot.cash.toLocaleString()}${carried ? ` <span>· CARRYING $${carried.toLocaleString()}</span>` : ''} <em>REP ${g.rep.overall} ${repTitle(g.rep.overall)}</em>`);
     const a = g.jobs.active;
-    this.set(this.jobEl, 'job', a ? `<b>JOB: ${a.title}</b> ${Math.ceil(a.t)}s · ${a.done.filter(Boolean).length}/${a.done.length} <i>[X] abandon</i>` : g.missions.run ? '' : '<i>[M] MAP · [J] FIXER JOBS</i>');
+    this.set(this.jobEl, 'job', a ? `<b>JOB: ${a.title}</b> ${Math.ceil(a.t)}s · ${a.done.filter(Boolean).length}/${a.done.length} <i>[X] abandon</i>` : g.missions.run ? '' : (device.touch ? '' : '<i>[M] MAP · [J] FIXER JOBS</i>'));
     if (g.jobs.phoneOpen) {
       const rows = g.jobs.offers.map((o, i) => `<div class="${i === g.jobs.offer ? 'sel' : ''}">${i === g.jobs.offer ? '▶' : '&nbsp;'} ${o.title} <em>$${o.pay.toLocaleString()}</em></div>`).join('');
       this.set(this.phoneEl, 'phone', `<div class="label">FIXER</div>${rows}<div class="brief">${g.jobs.offers[g.jobs.offer].brief}</div><div class="label">[J] NEXT · [ENTER] TAKE IT · [BACKSPACE] CLOSE</div>`);

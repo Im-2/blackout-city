@@ -4,6 +4,7 @@
 import { HALF } from '../world/layout';
 import { Place, PlaceCategory, PRIO } from '../map/places';
 import { drawIcon, iconUrl, ICON_R, IconKind } from './mapicons';
+import { device } from '../core/device';
 import type { Game } from '../core/game';
 
 const LABELS: [string, number, number][] = [
@@ -110,6 +111,39 @@ export class FullMap {
       this.cx += before.x - after.x;
       this.cz += before.z - after.z;
     }, { passive: false });
+    if (device.touch) this.bindTouch();
+  }
+
+  /** one finger pans, two pinch, a tap is a click */
+  private bindTouch() {
+    let start: { d: number; zoom: number; cx: number; cz: number; mx: number; my: number; moved: boolean; n: number } | null = null;
+    const read = (e: TouchEvent) => {
+      const a = e.touches[0], b = e.touches[1];
+      return b ? { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), mx: (a.clientX + b.clientX) / 2, my: (a.clientY + b.clientY) / 2, n: 2 } : { d: 0, mx: a.clientX, my: a.clientY, n: 1 };
+    };
+    const c = this.c;
+    c.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      this.searchEl.blur();
+      this.fly = null;
+      const r = read(e);
+      start = { ...r, zoom: this.zoom, cx: this.cx, cz: this.cz, moved: r.n > 1 };
+    }, { passive: false });
+    c.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (!start || !e.touches.length) return;
+      const r = read(e);
+      if (r.n !== start.n) { start = { ...r, zoom: this.zoom, cx: this.cx, cz: this.cz, moved: true }; return; }
+      if (Math.hypot(r.mx - start.mx, r.my - start.my) > 8) start.moved = true;
+      if (r.n === 2 && start.d > 0) this.zoom = this.clampZoom(start.zoom * (r.d / start.d));
+      this.cx = start.cx - (r.mx - start.mx) / this.zoom;
+      this.cz = start.cz - (r.my - start.my) / this.zoom;
+    }, { passive: false });
+    c.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (start && !start.moved && !e.touches.length) this.clickMap(start.mx, start.my);
+      if (!e.touches.length) start = null;
+    }, { passive: false });
   }
 
   // ------------------------------------------------------------------ geometry
@@ -154,9 +188,9 @@ export class FullMap {
   private buildSide() {
     const s = this.side;
     s.innerHTML = `
-      <div class="ms-head">LOCATIONS</div>
+      <div class="ms-head">LOCATIONS<button class="ms-close">✕</button></div>
       <div class="ms-tabs"></div>
-      <div class="ms-tools"><input class="ms-search" placeholder="SEARCH" spellcheck="false"/><button class="ms-sort"></button></div>
+      <div class="ms-tools"><input class="ms-search" placeholder="SEARCH" spellcheck="false"/><button class="ms-sort"></button><button class="ms-key">KEY</button></div>
       <div class="ms-list" tabindex="0"></div>
       <div class="ms-act"></div>
       <div class="ms-legend">${LEGEND.map(([k, col, name, tag]) => `<span><img src="${iconUrl(k, col, tag)}" alt=""/>${name}</span>`).join('')}</div>`;
@@ -164,6 +198,8 @@ export class FullMap {
     this.listEl = s.querySelector('.ms-list')!;
     this.actEl = s.querySelector('.ms-act')!;
     this.sortEl = s.querySelector('.ms-sort')!;
+    s.querySelector('.ms-close')!.addEventListener('click', () => this.close());
+    s.querySelector('.ms-key')!.addEventListener('click', () => s.classList.toggle('show-key'));
     this.searchEl = s.querySelector('.ms-search')!;
     this.tabsEl.innerHTML = FILTERS.map(([f, name]) => `<button data-f="${f}">${name}</button>`).join('');
     this.tabsEl.addEventListener('click', (e) => {

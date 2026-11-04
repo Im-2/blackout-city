@@ -52,6 +52,8 @@ import { Races } from '../activities/races';
 import { Reputation } from '../reputation/reputation';
 import { Records } from '../save/records';
 import { Places } from '../map/places';
+import { TouchControls } from '../ui/touch';
+import { device } from './device';
 import { Home } from '../world/home';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results' | 'map' | 'menu';
@@ -113,6 +115,7 @@ export class Game {
   rep!: Reputation;
   records = new Records();
   places = new Places(this);
+  touch: TouchControls | null = null;
   homeUi!: HomeUi;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
@@ -143,7 +146,7 @@ export class Game {
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, device.mobile ? 1 : 1.5));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.info.autoReset = false;
@@ -218,6 +221,7 @@ export class Game {
     this.missions = new Missions(this);
     this.map = new FullMap(this);
     this.homeUi = new HomeUi(this);
+    if (device.touch) this.touch = new TouchControls(this);
     this.hack.build();
     this.heist = new Heist(this);
     this.news = new News(this);
@@ -243,6 +247,7 @@ export class Game {
     fresh.style.display = this.save.hasProgress ? '' : 'none';
     this.confirmButton(fresh, () => { this.newGame(); });
     this.confirmButton(S.pause.querySelector('.newgame') as HTMLElement, () => this.newGame());
+    for (const s of [S.title, S.pause]) s.querySelector('.ctl')?.addEventListener('click', () => this.touch?.openSettings());
     S.pause.querySelector('.resume')!.addEventListener('click', () => this.resume());
     S.pause.querySelector('.restart')!.addEventListener('click', () => { if (this.missions.run) this.missions.retry(false); else this.hud.toast('NO MISSION RUNNING', 'dim'); });
     S.pause.querySelector('.quitm')!.addEventListener('click', () => { if (this.missions.run) this.missions.quit(); else this.hud.toast('NO MISSION RUNNING', 'dim'); });
@@ -533,6 +538,7 @@ export class Game {
     this.fpsN++;
     if (this.fpsT > 1) { this.fps = this.fpsN / this.fpsT; this.fpsT = 0; this.fpsN = 0; }
     const inp = this.input;
+    this.touch?.update();
 
     // global keys
     if (inp.pressed('toggleHud')) this.hud.setVisible(!this.hud.visible);

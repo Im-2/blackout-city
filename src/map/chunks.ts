@@ -6,12 +6,13 @@ import { Rng } from '../core/math';
 import { Vehicle } from '../vehicles/vehicle';
 import { colorFor, pickKind } from '../ai/traffic';
 import { districtAt, DISTRICTS, District } from './districts';
+import { device } from '../core/device';
 import type { Game } from '../core/game';
 import type { REdge } from '../world/layout';
 import type { SpotInfo } from '../world/city';
 
 const CELL = 28;
-const PARKED_IN = 115, PARKED_OUT = 165, PARKED_MAX = 26;
+const PARKED_IN = 115, PARKED_OUT = 165, PARKED_MAX = device.mobile ? 10 : 26;
 
 interface ParkSpot extends SpotInfo { v: Vehicle | null; gone: boolean; }
 

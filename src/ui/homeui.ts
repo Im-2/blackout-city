@@ -168,7 +168,7 @@ export class HomeUi {
       </div>`).join('');
     const nav = `${this.tabs.length > 1 ? '[←→] TAB · ' : ''}[↑↓] CHOOSE · [ENTER] SELECT · [E] CLOSE`;
     this.el.innerHTML = `
-      <div class="hu-head"><span>${this.title}</span><b>$${this.g.save.data.cash.toLocaleString()}</b></div>
+      <div class="hu-head"><span>${this.title}</span><b>$${this.g.save.data.cash.toLocaleString()}</b><button class="hu-close" data-close>✕</button></div>
       ${tabs}<div class="hu-list">${rows}</div>
       <div class="hu-foot" data-close>${nav}</div>`;
   }

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { basicMat } from '../render/patch';
 import { Vehicle } from '../vehicles/vehicle';
 import { MISSIONS } from './data';
+import { device } from '../core/device';
 import { RACE_MISSIONS } from '../activities/races';
 import { MissionCtx, MissionDef, MissionStep, TYPE_INFO } from './types';
 import { DISTRICTS } from '../map/districts';
@@ -90,7 +91,7 @@ export class Missions {
   }
   get panelTitle() { return this.run ? `${TYPE_INFO[this.run.def.type].label}: ${this.run.def.title}` : 'FREE ROAM'; }
   get objective() { return this.run && this.step ? this.text(this.step.text, this.run.ctx) : this.g.jobs.active ? this.g.jobs.active.title : 'Walk or drive into a marker'; }
-  get sub() { return this.run && this.step ? this.text(this.step.sub, this.run.ctx) : this.g.jobs.active ? this.g.jobs.active.brief : '[M] full map'; }
+  get sub() { return this.run && this.step ? this.text(this.step.sub, this.run.ctx) : this.g.jobs.active ? this.g.jobs.active.brief : device.touch ? 'MAP is at the top' : '[M] full map'; }
   get timeLeft() { return this.run && this.run.def.timeLimit ? this.run.timeLeft : null; }
   target(): THREE.Vector3 | null {
     if (!this.run || !this.step?.target) return null;

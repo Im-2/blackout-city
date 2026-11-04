@@ -11,6 +11,8 @@ export type Action =
   | 'pause' | 'escape' | 'confirm' | 'back' | 'menuUp' | 'menuDown' | 'menuLeft' | 'menuRight'
   | 'toggleHud' | 'photoMode' | 'mute' | 'debugOverlay' | 'cycleQuality';
 
+import { device } from './device';
+
 export type Axis = 'moveX' | 'moveY' | 'steer' | 'throttle';
 
 const BINDINGS: Record<Action, { keys?: string[]; mouse?: number[] }> = {
@@ -82,6 +84,7 @@ export class Input {
       this.mouseDY += e.movementY;
     });
     window.addEventListener('mousedown', (e) => {
+      if (device.touch) return; // taps on menus aren't hack clicks
       if (e.button < 3) {
         this.mouseDown[e.button] = true;
         this.mousePressed[e.button] = true;
@@ -98,6 +101,7 @@ export class Input {
   }
 
   lock() {
+    if (device.touch) return;
     if (!this.locked) this.canvas.requestPointerLock?.()?.catch?.(() => {});
   }
   unlock() {

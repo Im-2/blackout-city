@@ -1,0 +1,11 @@
+{
+  "name": "Blackout City",
+  "short_name": "Blackout",
+  "description": "Cut the power. Rob the city.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0f141c",
+  "theme_color": "#0f141c",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

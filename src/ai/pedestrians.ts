@@ -13,6 +13,7 @@ import { BLOCKS, blockBounds, groundHeight, CURB_H } from '../world/layout';
 import { GeoBuilder } from '../world/geo';
 import { basicMat, worldMat } from '../render/patch';
 import { texNoise } from '../assets/textures';
+import { device } from '../core/device';
 import type { Game } from '../core/game';
 
 type Role = 'walker' | 'vendor' | 'busker' | 'sitter' | 'chat' | 'queue' | 'guard';
@@ -54,7 +55,7 @@ interface Agent {
 
 interface Station { x: number; z: number; heading: number; anim: AnimState; taken: Agent | null; }
 
-const POOL = 230;
+const POOL = device.mobile ? 90 : 230;
 const FULL_R = 52;
 const GHOST_R = 165;
 

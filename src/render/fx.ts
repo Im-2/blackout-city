@@ -1,8 +1,9 @@
 // Pixel-cube particles (one InstancedMesh), hack beams, shockwave rings.
 import * as THREE from 'three';
+import { device } from '../core/device';
 import { basicMat } from './patch';
 
-const MAX = 700;
+const MAX = device.mobile ? 180 : 700;
 
 interface P {
   x: number; y: number; z: number;
@@ -37,6 +38,7 @@ export class Fx {
   }
 
   spawn(kind: FxKind, pos: THREE.Vector3, count: number, dir?: THREE.Vector3, power = 1, color?: string) {
+    if (device.mobile) count = Math.ceil(count * 0.4);
     for (let i = 0; i < count; i++) {
       if (this.ps.length >= MAX) this.ps.shift();
       const R = () => Math.random() * 2 - 1;
