@@ -34,7 +34,7 @@ export class WorldTime {
   }
 
   reset() {
-    this.hour = 17.6;
+    this.hour = this.g.save.data.hour;
     this.rain = 0;
     this.rainTarget = 0;
     this.weatherT = 140;

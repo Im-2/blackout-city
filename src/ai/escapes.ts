@@ -186,6 +186,7 @@ export class Escapes {
       const bb = blockBounds(bi, bj);
       const x = this.rng.range(bb.x0 + 6, bb.x1 - 6), z = bb.z1 - 3.4;
       if (g.col.query(x - 1.2, z - 0.8, x + 1.2, z + 0.8).length) continue;
+      if (x > -46 && x < -10 && z > 44 && z < 50) continue; // keep the home's door and driveway clear
       b.box(x - 1.0, CURB_H, z - 0.6, x + 1.0, CURB_H + 1.3, z + 0.6, { color: this.rng.pick(['#2f4a5a', '#3f5a34', '#5a3a2a']), shadeSides: true });
       b.box(x - 1.05, CURB_H + 1.3, z - 0.65, x + 1.05, CURB_H + 1.38, z + 0.65, { color: '#2a2a2a' });
       g.col.add(x - 1.0, 0, z - 0.6, x + 1.0, CURB_H + 1.38, z + 0.6, false, 'dumpster');

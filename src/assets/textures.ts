@@ -56,6 +56,17 @@ export function texNoise(): THREE.CanvasTexture {
   return noiseTex;
 }
 
+let grainTex: THREE.CanvasTexture | null = null;
+
+/** the same mottle without the bevel, for surfaces that tile across a room */
+export function texGrain(): THREE.CanvasTexture {
+  if (grainTex) return grainTex;
+  const { c, ctx } = makeCanvas(16, 16);
+  mottle(ctx, 0, 0, 16, 16, '#ffffff', 0.07, 1);
+  grainTex = toTexture(c);
+  return grainTex;
+}
+
 export function texAsphalt() {
   const { c, ctx } = makeCanvas(64, 64);
   mottle(ctx, 0, 0, 64, 64, PAL.asphalt, 0.06, 2);

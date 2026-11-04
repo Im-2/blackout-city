@@ -13,6 +13,7 @@ import type { Game } from '../core/game';
 import { basicMat } from '../render/patch';
 import { GeoBuilder } from '../world/geo';
 import { worldMaterials } from '../world/materials';
+import { Home } from '../world/home';
 
 interface Pt { x: number; z: number; }
 type Mode = 'patrol' | 'pursuit' | 'roadblock' | 'stakeout' | 'leave' | 'deployed';
@@ -159,6 +160,9 @@ export class Police {
     const P = g.player.worldPos;
     this.seenNow = false;
     this.lastSeenT += dt;
+    // they can't come into the home: the search closes in on the front door
+    const home = g.home.inside && this.heat > 0;
+    if (home) { this.lastKnown.set(Home.DOOR_OUT.x, 0, Home.DOOR_OUT.z + 2); this.lastSeenT = Math.max(this.lastSeenT, 2); }
 
     // unit management
     const cap = UNIT_CAP[this.heat];
@@ -222,7 +226,7 @@ export class Police {
     if (this.heat > 0) {
       const inBlack = g.hack.isBlackedOut(P.x, P.z);
       if (this.lastSeenT < 0.5) this.progress += dt / (20 + this.heat * 7);
-      else if (this.lastSeenT > 5) this.progress -= dt / (inBlack ? 2.5 : 7);
+      else if (this.lastSeenT > 5) this.progress -= dt / (home ? 35 : inBlack ? 2.5 : 7);
       if (this.progress >= 1 && this.heat < 5) this.setHeat(this.heat + 1, 'more units inbound');
       if (this.progress < 0) {
         if (this.heat > this.minHeat) {
@@ -296,7 +300,8 @@ export class Police {
     if (g.player.busted || g.state !== 'playing') return;
     const P = g.player.worldPos;
     let pressing = false;
-    if (g.player.vehicle) {
+    if (g.home.inside) { /* safe behind the door */ }
+    else if (g.player.vehicle) {
       const v = g.player.vehicle;
       if (v.speedAbs < 2.2 && this.heat > 0) {
         for (const u of this.units) if (Math.hypot(u.pos.x - P.x, u.pos.z - P.z) < 6.5 && !u.wrecked) pressing = true;
@@ -460,6 +465,13 @@ export class Police {
     const tx = recent ? P.x : this.lastKnown.x, tz = recent ? P.z : this.lastKnown.z;
     const dt2 = Math.hypot(tx - u.pos.x, tz - u.pos.z);
     const direct = dt2 < 55 && (ai.sees || dt2 < 14);
+    // you've gone indoors: pull up outside and wait
+    if (g.home.inside && dt2 < 22) {
+      u.throttle = 0;
+      u.handbrake = true;
+      if (!ai.deployed && this.officers.length < 6) this.deploy(u);
+      return;
+    }
 
     if (ai.reverseT > 0) {
       ai.reverseT -= dt;
@@ -634,6 +646,11 @@ export class Police {
         tx = o.car.pos.x; tz = o.car.pos.z; speed = 6;
         if (Math.hypot(tx - o.pos.x, tz - o.pos.z) < 2.6) return true;
       } else if (!g.isVisible(o.pos.x, 1, o.pos.z) || d > 80) return true;
+    } else if (this.heat > 0 && g.home.inside) {
+      // waiting on the pavement
+      const w = g.home.stakeout(this.officers.indexOf(o));
+      tx = w.x; tz = w.z;
+      speed = Math.hypot(tx - o.pos.x, tz - o.pos.z) > 1 ? 4 : 0;
     } else if (this.heat > 0 && (o.sees || this.lastSeenT < 2)) {
       tx = P.x; tz = P.z; speed = d < 3 ? 4.5 : 6.0;
     } else if (this.heat > 0) {

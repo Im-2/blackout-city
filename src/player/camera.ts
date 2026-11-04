@@ -40,11 +40,12 @@ export class CameraRig {
   update(dt: number, g: Game) {
     const inp = g.input;
     const v = g.player.vehicle;
-    const mx = inp.mouseDX * SENS, my = inp.mouseDY * SENS;
-    if (inp.pressed('KeyC') && v) this.carView = (this.carView + 1) % 3;
+    const mx = inp.lookX * SENS, my = inp.lookY * SENS;
+    if (inp.pressed('carCamera') && v) this.carView = (this.carView + 1) % 3;
     this.shakeT += dt;
 
     let wantDist: number, height: number, fovTarget = 62, shoulder = 0;
+    const rx0 = -Math.cos(this.yaw), rz0 = Math.sin(this.yaw);
     const tgt = this.target;
     if (v) {
       if (!this.wasCar) { this.yaw = v.heading; this.pitch = -0.12; }
@@ -83,7 +84,10 @@ export class CameraRig {
       shoulder = 0.55;
       tgt.set(p.pos.x, p.pos.y + 1.55, p.pos.z);
       this.lead.set(0, 0, 0);
-      if (g.ceilingAt(p.pos.x, p.pos.z, p.pos.y) < 50) wantDist = Math.min(wantDist, 3.4);
+      if (g.ceilingAt(p.pos.x, p.pos.z, p.pos.y) < 50) wantDist = Math.min(wantDist, g.home.inHouse ? 2.7 : 3.4);
+      // the shoulder offset must not start behind a wall
+      const side = g.col.raycast(tgt.x, tgt.y, tgt.z, rx0, 0, rz0, shoulder + 0.25, true);
+      if (side !== Infinity) shoulder = Math.max(0, side - 0.25);
     }
     this.wasCar = !!v;
     this.dist = damp(this.dist, wantDist, 5, dt);
@@ -100,10 +104,15 @@ export class CameraRig {
     dx /= L; dy /= L; dz /= L;
     let dist = this.dist;
     const hit = g.col.raycast(base.x, base.y, base.z, dx, dy, dz, dist + 0.3);
-    if (hit !== Infinity) dist = Math.max(0.6, hit - 0.3);
+    // on foot it may come right in rather than end up behind the wall
+    if (hit !== Infinity) dist = Math.max(v ? 0.6 : 0.1, hit - 0.3);
     this.pos.set(base.x + dx * dist, base.y + dy * dist, base.z + dz * dist);
     if (!v) this.pos.y = Math.min(this.pos.y, g.ceilingAt(g.player.pos.x, g.player.pos.z, g.player.pos.y) - 0.4);
     this.pos.y = Math.max(this.pos.y, g.player.pos.y < -2 ? g.player.pos.y + 0.4 : 0.4);
+    // keep the near plane off the walls in tight rooms
+    if (g.home.inside) g.col.resolveCircle(this.pos, 0.2, this.pos.y - 0.1, 0, this.pos.y + 0.1, 0, true);
+    // camera jammed against the player: don't film the inside of their head
+    if (!g.player.hidden) g.player.view.root.visible = !!v || Math.hypot(this.pos.x - g.player.pos.x, this.pos.z - g.player.pos.z) > 0.55;
 
     // shake
     this.trauma = Math.max(0, this.trauma - dt * 1.4);

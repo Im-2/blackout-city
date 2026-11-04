@@ -2,6 +2,7 @@
 // Click sets a waypoint, right-click clears it.
 import { HALF } from '../world/layout';
 import { TYPE_INFO } from '../missions/types';
+import { houseIcon } from './hud';
 import type { Game } from '../core/game';
 
 const LABELS: [string, number, number][] = [
@@ -10,7 +11,7 @@ const LABELS: [string, number, number][] = [
 ];
 
 const PLACES: [string, string, number, number, string][] = [
-  ['HOME', 'Safehouse', -28, 46, '#7dffb0'],
+  ['G', 'Your garage: park a stolen car to keep it', -39.75, 47, '#7dffb0'],
   ['$', 'Pawn & Loan (fence)', -16.7, 10, '#ffd24a'],
   ['S', 'Mart 24', -40.5, 10, '#c8c3b5'],
   ['S', 'Gems & Co', -28, 10, '#c8a8d8'],
@@ -27,7 +28,7 @@ export class FullMap {
   private tip: HTMLDivElement;
   private legend: HTMLDivElement;
   open = false;
-  private ret: 'playing' | 'paused' = 'playing';
+  private ret: 'playing' | 'paused' | 'menu' = 'playing';
   private cx = 0;
   private cz = 0;
   private zoom = 1;
@@ -91,7 +92,7 @@ export class FullMap {
   private sx(x: number) { return innerWidth / 2 + (x - this.cx) * this.zoom; }
   private sy(z: number) { return innerHeight / 2 + (z - this.cz) * this.zoom; }
 
-  show(from: 'playing' | 'paused') {
+  show(from: 'playing' | 'paused' | 'menu') {
     const g = this.g;
     this.ret = from;
     this.open = true;
@@ -112,6 +113,7 @@ export class FullMap {
     this.open = false;
     this.el.style.display = 'none';
     if (this.ret === 'paused') { g.state = 'paused'; g.hud.show('pause'); }
+    else if (this.ret === 'menu') { g.state = 'menu'; g.homeUi.reveal(); }
     else g.play();
   }
 
@@ -130,7 +132,7 @@ export class FullMap {
   update(dt: number) {
     this.t += dt;
     const g = this.g;
-    if (g.input.pressed('KeyM', 'Escape')) { this.close(); return; }
+    if (g.input.pressed('map', 'escape')) { this.close(); return; }
     this.draw();
   }
 
@@ -193,6 +195,7 @@ export class FullMap {
     for (const s of g.travel.stands) this.box(this.sx(s.x), this.sy(s.z), 'TAXI', '#c4a03c');
     for (const s of g.escapes.stations) this.box(this.sx(s.entrance.x), this.sy(s.entrance.z), 'M', '#6a9fd8');
     for (const [t, , x, z, col] of PLACES) this.box(this.sx(x), this.sy(z), t, col);
+    houseIcon(c, this.sx(-28), this.sy(46), 1);
 
     // police activity
     const blink = Math.sin(this.t * 12) > 0;
@@ -226,6 +229,7 @@ export class FullMap {
         tip = `<b>${d.title}</b> · ${TYPE_INFO[d.type].label} · ${d.giver}<br>${st === 'locked' ? `LOCKED: ${d.unlock?.hint}` : d.intro}`;
       }
     }
+    if (!tip && Math.hypot(mx - this.sx(-28), my - this.sy(46)) < 14) tip = '<b>Home</b> · front door, taxi stand. Sleep here to save.';
     for (const [, name, x, z] of PLACES) if (!tip && Math.hypot(mx - this.sx(x), my - this.sy(z)) < 12) tip = name;
     for (const s of g.travel.stands) if (!tip && Math.hypot(mx - this.sx(s.x), my - this.sy(s.z)) < 12) tip = `Taxi stand: ${s.name}`;
     for (const s of g.escapes.stations) if (!tip && Math.hypot(mx - this.sx(s.entrance.x), my - this.sy(s.entrance.z)) < 10) tip = `Metro: ${s.name}`;

@@ -289,7 +289,7 @@ export class HackSystem {
     const g = this.g;
     this.time += realDt;
     const inp = g.input;
-    const want = (inp.isDown('KeyQ', 'Tab') && g.state === 'playing' && !g.player.busted);
+    const want = (inp.held('hack') && g.state === 'playing' && !g.player.busted);
     if (want && !this.active) g.audio.hackOn();
     this.active = want;
     this.blend = damp(this.blend, this.active ? 1 : 0, 10, realDt);
@@ -325,8 +325,8 @@ export class HackSystem {
 
     // execute
     if (this.active && this.selected) {
-      const alt = inp.clicked(2);
-      if (inp.clicked(0) || inp.pressed('KeyE') || alt) this.execute(this.selected, alt);
+      const alt = inp.pressed('hackAlt');
+      if (inp.pressed('hackPrimary') || alt) this.execute(this.selected, alt);
     }
   }
 

@@ -1,5 +1,5 @@
 // Cash economy: carried loot (lost if busted) -> sell at the pawn shop fence
-// or stash at the safehouse. Cash buys hack upgrades, car tuning, outfits,
+// or stash at home. Cash buys hack upgrades, car tuning, outfits,
 // and resprays.
 import type { Game } from './game';
 import type { LootItem } from '../save/save';
@@ -32,7 +32,7 @@ export class Loot {
 
   addCash(n: number) {
     this.g.save.data.cash += n;
-    this.g.save.write();
+    this.g.save.data.earned += n;
   }
 
   sellAll() {
@@ -52,7 +52,6 @@ export class Loot {
     if (!v) return;
     this.g.save.data.stash.push(...this.carried);
     this.carried = [];
-    this.g.save.write();
     this.g.hud.toast(`STASHED $${v.toLocaleString()} OF GOODS — SELL THEM LATER`, 'cool');
   }
 
@@ -72,15 +71,12 @@ export const UPGRADES: { id: 'blackout' | 'hackCost' | 'regen' | 'car'; name: st
 const RESPRAY = ['#2a4a2a', '#7a1c1c', '#e0e0d8', '#4a2a5a', '#d8782a', '#1c1c1e', ...PAL.carColors];
 
 export class Shop {
-  private upI = 0;
-
   constructor(private g: Game) {}
 
   private pay(n: number): boolean {
     const s = this.g.save.data;
     if (s.cash < n) { this.g.hud.toast(`NEED $${n.toLocaleString()} (HAVE $${s.cash.toLocaleString()})`, 'dim'); this.g.audio.deny(); return false; }
     s.cash -= n;
-    this.g.save.write();
     this.g.audio.cash();
     return true;
   }
@@ -92,7 +88,6 @@ export class Shop {
     if (!this.pay(next.price)) return;
     g.disguise.owned.add(next.id);
     g.save.data.outfits = [...g.disguise.owned];
-    g.save.write();
     g.disguise.wear(next.id);
   }
 
@@ -103,32 +98,16 @@ export class Shop {
     g.disguise.wear(owned[(i + 1) % owned.length].id);
   }
 
-  /** the upgrade terminal cycles through upgrades; each press buys the next affordable tier */
-  buyUpgrade() {
+  /** buy the next tier of an upgrade at the hacker desk */
+  buy(id: (typeof UPGRADES)[number]['id']) {
     const g = this.g;
+    const up = UPGRADES.find((u) => u.id === id)!;
     const u = g.save.data.upgrades;
-    for (let k = 0; k < UPGRADES.length; k++) {
-      const up = UPGRADES[(this.upI + k) % UPGRADES.length];
-      const lvl = u[up.id];
-      if (lvl >= up.cost.length) continue;
-      this.upI = (this.upI + k + 1) % UPGRADES.length;
-      const cost = up.cost[lvl];
-      if (!this.pay(cost)) { g.hud.hint(`Next upgrade: ${up.name} — $${cost.toLocaleString()}`); return; }
-      u[up.id] = lvl + 1;
-      g.save.write();
-      g.hud.toast(`UPGRADED: ${up.name.toUpperCase()} (LV ${lvl + 1})`, 'win');
-      if (up.id === 'car' && g.getawayCar) g.getawayCar.tune('getaway', u.car);
-      return;
-    }
-    g.hud.toast('ALL UPGRADES BOUGHT', 'dim');
-  }
-
-  sleep() {
-    const g = this.g;
-    g.save.write();
-    if (g.police.heat > 0 && g.police.lastSeenT > 3) { g.police.setHeat(g.police.minHeat); g.police.lastSeenT = 999; }
-    g.world.skipHours(3);
-    g.hud.toast('SAVED. YOU SLEPT IT OFF.', 'cool');
+    const lvl = u[id];
+    if (lvl >= up.cost.length || !this.pay(up.cost[lvl])) return;
+    u[id] = lvl + 1;
+    g.hud.toast(`UPGRADED: ${up.name.toUpperCase()} (LV ${lvl + 1})`, 'win');
+    if (id === 'car' && g.getawayCar) g.getawayCar.tune('getaway', u.car);
   }
 
   respray(v: Vehicle) {

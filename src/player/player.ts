@@ -104,7 +104,7 @@ export class Player {
   update(dt: number) {
     const g = this.g;
     const inp = g.input;
-    if (g.travel.open) { this.view.update(dt, 'idle', 0); return; }
+    if (g.travel.open || (g.fading && !this.vehicle)) { this.view.update(dt, 'idle', 0); return; }
     if (g.missions.card) {
       // hold still for the intro card
       const v = this.vehicle;
@@ -113,7 +113,7 @@ export class Player {
       return;
     }
     if (this.hidden) {
-      if (inp.pressed('KeyE') || inp.pressed('Space')) { this.hidden = false; this.view.root.visible = true; }
+      if (inp.pressed('interact', 'jump')) { this.hidden = false; this.view.root.visible = true; }
       return;
     }
     if (this.travel) {
@@ -179,13 +179,13 @@ export class Player {
     const cy = g.camRig.yaw;
     const fx = Math.sin(cy), fz = Math.cos(cy);
     const rx = -Math.cos(cy), rz = Math.sin(cy);
-    const ia = inp.axis(['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']);
-    const ib = inp.axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
+    const ia = inp.moveY;
+    const ib = inp.moveX;
     let mx = fx * ia + rx * ib, mz = fz * ia + rz * ib;
     const ml = Math.hypot(mx, mz);
     if (ml > 1e-3) { mx /= ml; mz /= ml; }
     const hacking = g.hack.active;
-    const run = inp.isDown('ShiftLeft', 'ShiftRight') && !hacking;
+    const run = inp.held('run') && !hacking;
     const top = ml > 0 ? (run ? RUN : WALK) * (hacking ? 0.5 : 1) * (g.heist.hasLoot ? 0.92 : 1) : 0;
     const lambda = ml > 0 ? (this.grounded ? 9 : 2.5) : this.grounded ? 12 : 1;
     this.vx = damp(this.vx, mx * top, lambda, dt);
@@ -195,7 +195,7 @@ export class Player {
     else if (hacking) this.heading = dampAngle(this.heading, cy, 10, dt);
 
     // jump / vault
-    if (inp.pressed('Space') && this.grounded) {
+    if (inp.pressed('jump') && this.grounded) {
       if (!this.tryVault()) {
         this.vy = 5.2;
         this.grounded = false;
@@ -214,7 +214,7 @@ export class Player {
     this.view.update(dt, this.state, sp);
     this.syncView();
     this.updateFocus();
-    if (inp.pressed('KeyE') && !g.hack.active) this.interact();
+    if (inp.pressed('interact') && !g.hack.active) this.interact();
     this.updatePick(dt);
   }
 
@@ -271,6 +271,8 @@ export class Player {
       if (depth > 3.2) continue;
       const dist = 1.0 + depth + 0.6;
       const to = new THREE.Vector3(this.pos.x + fx * dist, 0, this.pos.z + fz * dist);
+      // never vault through a wall behind the obstacle
+      if (!g.col.lineOfSight(this.pos.x, feet + 1.6, this.pos.z, to.x, feet + 1.6, to.z)) continue;
       // landing must be clear
       const probe = { x: to.x, z: to.z };
       const res = g.col.resolveCircle(probe, R, feet - 0.5, 0.45, feet + 1.7);
@@ -313,7 +315,7 @@ export class Player {
     const t = this.pickTarget;
     if (!t) return;
     const near = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z) < 4.2;
-    if (!g.input.isDown('KeyE') || !near || this.speed > 1 || t.driver !== 'none') { this.pickTarget = null; this.pick = 0; return; }
+    if (!g.input.held('interact') || !near || this.speed > 1 || t.driver !== 'none') { this.pickTarget = null; this.pick = 0; return; }
     this.pick += dt / 1.4;
     this.heading = Math.atan2(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
     if (this.pick >= 1) {
@@ -404,14 +406,14 @@ export class Player {
       this.view.update(dt, v.two ? 'ride' : 'drive', 0);
       return;
     }
-    v.throttle = inp.axis(['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']);
-    v.steer = inp.axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
-    v.handbrake = inp.isDown('Space');
-    v.boost = inp.isDown('ShiftLeft', 'ShiftRight');
+    v.throttle = inp.throttle;
+    v.steer = inp.steer;
+    v.handbrake = inp.held('handbrake');
+    v.boost = inp.held('boost');
     this.pos.copy(v.pos);
     this.heading = v.heading;
     this.view.update(dt, v.two ? 'ride' : 'drive', Math.abs(v.speed));
-    if (inp.pressed('KeyE') && !g.hack.active) {
+    if (inp.pressed('interact') && !g.hack.active) {
       if (g.carAction) g.carAction.action();
       else this.exitVehicle();
     }

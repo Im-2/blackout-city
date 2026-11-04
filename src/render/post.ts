@@ -16,6 +16,7 @@ uniform float uFlash;
 uniform vec3 uFlashColor;
 uniform float uDamage;
 uniform float uBlackoutPulse;
+uniform float uWarm;
 varying vec2 vUv;
 
 void main() {
@@ -34,6 +35,9 @@ void main() {
   col = mix(col, vec3(lum), 0.12);
   col = col * 0.96 + 0.025;
 
+  // Home: a warmer grade than the street
+  col *= mix(vec3(1.0), vec3(1.08, 1.0, 0.88), uWarm);
+
   // Hacker vision
   if (uHack > 0.001) {
     vec3 h = vec3(lum) * vec3(0.55, 0.95, 1.1) + vec3(0.0, 0.03, 0.06);
@@ -46,7 +50,7 @@ void main() {
 
   // Vignette
   float v = smoothstep(0.85, 0.25, length(c * vec2(1.1, 1.0)));
-  col *= mix(0.62, 1.0, v);
+  col *= mix(mix(0.62, 0.84, uWarm), 1.0, v);
 
   // Damage: red edge
   col = mix(col, vec3(0.55, 0.05, 0.03), uDamage * (1.0 - v) * 0.8);
@@ -67,6 +71,7 @@ export class Post {
   flash = 0;
   damage = 0;
   blackoutPulse = 0;
+  warm = 0;
 
   constructor(private renderer: THREE.WebGLRenderer) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -84,6 +89,7 @@ export class Post {
         uFlashColor: { value: new THREE.Color(1, 1, 1) },
         uDamage: { value: 0 },
         uBlackoutPulse: { value: 0 },
+        uWarm: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,
@@ -117,6 +123,7 @@ export class Post {
     u.uFlash.value = this.flash;
     u.uDamage.value = this.damage;
     u.uBlackoutPulse.value = this.blackoutPulse;
+    u.uWarm.value = this.warm;
 
     const r = this.renderer;
     r.setRenderTarget(this.rt);

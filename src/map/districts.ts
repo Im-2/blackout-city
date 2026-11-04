@@ -67,7 +67,7 @@ export function districtOfBlock(bi: number, bj: number): District {
 }
 
 export function districtAt(x: number, z: number): District {
-  // the shop-row block straddles the line: pawn shop in Old Town, safehouse in Residential
+  // the shop-row block straddles the line: pawn shop in Old Town, home in Residential
   if (x > -49 && x < -7 && z > 25 && z < 49) return 'residential';
   const bi = Math.max(0, Math.min(BLOCKS - 1, Math.floor((x + HALF) / PITCH)));
   const bj = Math.max(0, Math.min(BLOCKS - 1, Math.floor((z + HALF) / PITCH)));

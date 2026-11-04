@@ -111,7 +111,7 @@ export class Missions {
   private runCleanup() {
     const r = this.run!;
     r.def.cleanup?.(r.ctx);
-    for (const v of r.spawned) if (v.driver === 'none' && this.g.vehicles.includes(v)) this.g.removeVehicle(v);
+    for (const v of r.spawned) if (v.driver === 'none' && v !== this.g.home.car && this.g.vehicles.includes(v)) this.g.removeVehicle(v);
   }
 
   private makeRun(def: MissionDef): Run {
@@ -189,9 +189,9 @@ export class Missions {
     const best = prev ? Math.min(prev.best, time) : time;
     s.completed[def.id] = { n: (prev?.n ?? 0) + 1, best };
     s.cash += cash;
+    s.earned += cash;
     s.rep.overall += def.reward.reputation;
     s.rep.districts[def.district] = (s.rep.districts[def.district] ?? 0) + def.reward.reputation;
-    g.save.write();
     const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     this.ended = {
       kind: 'success', def,
@@ -263,6 +263,7 @@ export class Missions {
     this.run = null;
     this.ended = null;
     g.play();
+    g.hud.hint('Progress is only saved when you sleep in your bed at home.');
   }
 
   /** end-screen buttons (click or key) */
@@ -278,11 +279,11 @@ export class Missions {
     const inp = this.g.input;
     if (!this.ended) return;
     if (this.ended.kind === 'success') {
-      if (inp.pressed('Enter', 'KeyE', 'Space')) this.action('continue');
+      if (inp.pressed('confirm', 'interact', 'jump')) this.action('continue');
     } else {
-      if (inp.pressed('Enter', 'KeyC')) this.action('checkpoint');
-      else if (inp.pressed('KeyR')) this.action('mission');
-      else if (inp.pressed('KeyX', 'Backspace')) this.action('quit');
+      if (inp.pressed('confirm', 'retryCheckpoint')) this.action('checkpoint');
+      else if (inp.pressed('retry')) this.action('mission');
+      else if (inp.pressed('abandon', 'back')) this.action('quit');
     }
   }
 
@@ -355,10 +356,10 @@ export class Missions {
     const g = this.g;
     const d = this.card!;
     const inp = g.input;
-    if (inp.pressed('Enter', 'KeyE')) {
+    if (inp.pressed('confirm', 'interact')) {
       g.hud.missionCard(null);
       this.start(d);
-    } else if (inp.pressed('Backspace', 'KeyX')) {
+    } else if (inp.pressed('back', 'abandon')) {
       this.card = null;
       g.hud.missionCard(null);
       this.cooldown.add(d.id);

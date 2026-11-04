@@ -14,40 +14,39 @@ const rng = new Rng(9);
 export function updateDebug(g: Game) {
   const inp = g.input;
   for (let n = 0; n <= 5; n++) {
-    if (inp.pressed(`Digit${n}`)) {
+    if (inp.debugKey(`Digit${n}`)) {
       g.police.setHeat(n, 'debug');
       if (n === 0) { g.police.minHeat = 0; g.police.lastSeenT = 999; }
       g.hud.toast(`DEBUG: HEAT ${n}`, 'dim');
     }
   }
-  if (inp.pressed('KeyT')) teleport(g, g.bank.playerStart.x, -46, 0, 'BANK (BACK ALLEY)');
-  if (inp.pressed('KeyY')) teleport(g, g.city.dropZone.doorX - 18, g.city.dropZone.doorZ, Math.PI / 2, 'DROP POINT');
-  if (inp.pressed('KeyU')) { const c = blockCenter(6, 6); teleport(g, c.x - 30, c.z - 2, 0, 'MID-CITY'); }
-  if (inp.pressed('KeyG')) { g.spawnGetawayBeside(); g.hud.toast('DEBUG: GETAWAY CAR', 'dim'); }
-  if (inp.pressed('KeyL') && !g.heist.hasLoot) {
+  if (inp.debugKey('KeyT')) teleport(g, g.bank.playerStart.x, -46, 0, 'BANK (BACK ALLEY)');
+  if (inp.debugKey('KeyY')) teleport(g, g.city.dropZone.doorX - 18, g.city.dropZone.doorZ, Math.PI / 2, 'DROP POINT');
+  if (inp.debugKey('KeyU')) { const c = blockCenter(6, 6); teleport(g, c.x - 30, c.z - 2, 0, 'MID-CITY'); }
+  if (inp.debugKey('KeyG')) { g.spawnGetawayBeside(); g.hud.toast('DEBUG: GETAWAY CAR', 'dim'); }
+  if (inp.debugKey('KeyL') && !g.heist.hasLoot) {
     g.reset(false);
     g.missions.startAt('bank_heist', 'escape');
     g.hud.toast('DEBUG: LOOT IN HAND', 'dim');
   }
-  if (inp.pressed('Backquote')) {
+  if (inp.debugKey('Backquote')) {
     g.save.data.unlockAll = !g.save.data.unlockAll;
-    g.save.write();
     g.hud.toast(g.save.data.unlockAll ? 'DEBUG: ALL MISSIONS UNLOCKED' : 'DEBUG: UNLOCKS NORMAL', 'dim');
   }
-  if (inp.pressed('KeyO')) { g.world.skipHours(3); g.hud.toast(`DEBUG: ${Math.floor(g.world.hour)}:00`, 'dim'); }
-  if (inp.pressed('KeyI')) g.world.toggleRain();
-  if (inp.pressed('KeyB')) spawnBeside(g, 'bicycle');
-  if (inp.pressed('KeyN')) spawnBeside(g, 'motorbike');
-  if (inp.pressed('KeyV')) { spawnBeside(g, ALL_KINDS[cycleI % ALL_KINDS.length]); cycleI++; }
-  if (inp.pressed('KeyK')) {
+  if (inp.debugKey('KeyO')) { g.world.skipHours(3); g.hud.toast(`DEBUG: ${Math.floor(g.world.hour)}:00`, 'dim'); }
+  if (inp.debugKey('KeyI')) g.world.toggleRain();
+  if (inp.debugKey('KeyB')) spawnBeside(g, 'bicycle');
+  if (inp.debugKey('KeyN')) spawnBeside(g, 'motorbike');
+  if (inp.debugKey('KeyV')) { spawnBeside(g, ALL_KINDS[cycleI % ALL_KINDS.length]); cycleI++; }
+  if (inp.debugKey('KeyK')) {
     const P = g.player.worldPos;
     g.peds.spawnCrowd(P.x, P.z, 30);
     g.hud.toast('DEBUG: CROWD', 'dim');
   }
   // teleport through the enterable buildings
   const sites = g.sites();
-  if (sites.length && (inp.pressed('BracketRight') || inp.pressed('BracketLeft'))) {
-    tpI = (tpI + (inp.pressed('BracketRight') ? 1 : -1) + sites.length) % sites.length;
+  if (sites.length && (inp.debugKey('BracketRight') || inp.debugKey('BracketLeft'))) {
+    tpI = (tpI + (inp.debugKey('BracketRight') ? 1 : -1) + sites.length) % sites.length;
     const s = sites[tpI];
     teleport(g, s.x, s.z, s.heading, s.name.toUpperCase());
   }

@@ -1,14 +1,67 @@
-// Keyboard + mouse state with per-frame "pressed" edges and pointer lock.
+// Player input goes through named actions, never raw keys: gameplay asks
+// `input.held('handbrake')`, the table below says what triggers it. Touch controls
+// can drive the same actions with press()/release()/setAxis()/addLook().
+// Only debug.ts reads raw keys (clip tools).
+
+export type Action =
+  | 'moveForward' | 'moveBack' | 'moveLeft' | 'moveRight' | 'run' | 'jump'
+  | 'accelerate' | 'brake' | 'steerLeft' | 'steerRight' | 'handbrake' | 'boost' | 'carCamera'
+  | 'interact' | 'hack' | 'hackPrimary' | 'hackAlt'
+  | 'map' | 'phone' | 'abandon' | 'retry' | 'retryCheckpoint'
+  | 'pause' | 'escape' | 'confirm' | 'back' | 'menuUp' | 'menuDown' | 'menuLeft' | 'menuRight'
+  | 'toggleHud' | 'photoMode' | 'mute' | 'debugOverlay' | 'cycleQuality';
+
+export type Axis = 'moveX' | 'moveY' | 'steer' | 'throttle';
+
+const BINDINGS: Record<Action, { keys?: string[]; mouse?: number[] }> = {
+  moveForward: { keys: ['KeyW', 'ArrowUp'] },
+  moveBack: { keys: ['KeyS', 'ArrowDown'] },
+  moveLeft: { keys: ['KeyA', 'ArrowLeft'] },
+  moveRight: { keys: ['KeyD', 'ArrowRight'] },
+  run: { keys: ['ShiftLeft', 'ShiftRight'] },
+  jump: { keys: ['Space'] },
+  accelerate: { keys: ['KeyW', 'ArrowUp'] },
+  brake: { keys: ['KeyS', 'ArrowDown'] },
+  steerLeft: { keys: ['KeyA', 'ArrowLeft'] },
+  steerRight: { keys: ['KeyD', 'ArrowRight'] },
+  handbrake: { keys: ['Space'] },
+  boost: { keys: ['ShiftLeft', 'ShiftRight'] },
+  carCamera: { keys: ['KeyC'] },
+  interact: { keys: ['KeyE'] },
+  hack: { keys: ['KeyQ', 'Tab'] },
+  hackPrimary: { keys: ['KeyE'], mouse: [0] },
+  hackAlt: { mouse: [2] },
+  map: { keys: ['KeyM'] },
+  phone: { keys: ['KeyJ'] },
+  abandon: { keys: ['KeyX'] },
+  retry: { keys: ['KeyR'] },
+  retryCheckpoint: { keys: ['KeyC'] },
+  pause: { keys: ['KeyP'] },
+  escape: { keys: ['Escape'] },
+  confirm: { keys: ['Enter'] },
+  back: { keys: ['Backspace'] },
+  menuUp: { keys: ['ArrowUp', 'KeyW'] },
+  menuDown: { keys: ['ArrowDown', 'KeyS'] },
+  menuLeft: { keys: ['ArrowLeft', 'KeyA'] },
+  menuRight: { keys: ['ArrowRight', 'KeyD'] },
+  toggleHud: { keys: ['KeyH'] },
+  photoMode: { keys: ['F2'] },
+  mute: { keys: ['KeyZ'] },
+  debugOverlay: { keys: ['F3'] },
+  cycleQuality: { keys: ['F4'] },
+};
 
 export class Input {
   private down = new Set<string>();
   private pressedSet = new Set<string>();
-  private releasedSet = new Set<string>();
-  mouseDX = 0;
-  mouseDY = 0;
-  wheel = 0;
-  mouseDown = [false, false, false];
+  private mouseDX = 0;
+  private mouseDY = 0;
+  private mouseDown = [false, false, false];
   private mousePressed = [false, false, false];
+  /** actions held or tapped by something other than the keyboard and mouse */
+  private virtualDown = new Set<Action>();
+  private virtualPressed = new Set<Action>();
+  private axes: Partial<Record<Axis, number>> = {};
   locked = false;
   onLockChange: (locked: boolean) => void = () => {};
 
@@ -19,10 +72,7 @@ export class Input {
       if (!this.down.has(e.code)) this.pressedSet.add(e.code);
       this.down.add(e.code);
     });
-    window.addEventListener('keyup', (e) => {
-      this.down.delete(e.code);
-      this.releasedSet.add(e.code);
-    });
+    window.addEventListener('keyup', (e) => this.down.delete(e.code));
     window.addEventListener('blur', () => this.down.clear());
     window.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
@@ -39,7 +89,6 @@ export class Input {
       if (e.button < 3) this.mouseDown[e.button] = false;
     });
     window.addEventListener('contextmenu', (e) => e.preventDefault());
-    window.addEventListener('wheel', (e) => (this.wheel += Math.sign(e.deltaY)), { passive: true });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.canvas;
       this.onLockChange(this.locked);
@@ -53,28 +102,61 @@ export class Input {
     if (this.locked) document.exitPointerLock();
   }
 
-  isDown(...codes: string[]) {
-    return codes.some((c) => this.down.has(c));
+  // ------------------------------------------------------------------ actions
+  held(...actions: Action[]) {
+    return actions.some((a) => {
+      if (this.virtualDown.has(a)) return true;
+      const b = BINDINGS[a];
+      return !!b.keys?.some((k) => this.down.has(k)) || !!b.mouse?.some((m) => this.mouseDown[m]);
+    });
   }
-  pressed(...codes: string[]) {
-    return codes.some((c) => this.pressedSet.has(c));
+  /** went down this frame */
+  pressed(...actions: Action[]) {
+    return actions.some((a) => {
+      if (this.virtualPressed.has(a)) return true;
+      const b = BINDINGS[a];
+      return !!b.keys?.some((k) => this.pressedSet.has(k)) || !!b.mouse?.some((m) => this.mousePressed[m]);
+    });
   }
-  released(...codes: string[]) {
-    return codes.some((c) => this.releasedSet.has(c));
+
+  private axis(name: Axis, neg: Action, pos: Action) {
+    const analog = this.axes[name];
+    if (analog) return analog;
+    return (this.held(pos) ? 1 : 0) - (this.held(neg) ? 1 : 0);
   }
-  clicked(button = 0) {
-    return this.mousePressed[button];
+  get moveX() { return this.axis('moveX', 'moveLeft', 'moveRight'); }
+  get moveY() { return this.axis('moveY', 'moveBack', 'moveForward'); }
+  get steer() { return this.axis('steer', 'steerLeft', 'steerRight'); }
+  get throttle() { return this.axis('throttle', 'brake', 'accelerate'); }
+  get lookX() { return this.mouseDX; }
+  get lookY() { return this.mouseDY; }
+
+  // ------------------------------------------------------------------ other input sources
+  press(a: Action) {
+    if (!this.virtualDown.has(a)) this.virtualPressed.add(a);
+    this.virtualDown.add(a);
   }
-  axis(neg: string[], pos: string[]) {
-    return (this.isDown(...pos) ? 1 : 0) - (this.isDown(...neg) ? 1 : 0);
+  release(a: Action) {
+    this.virtualDown.delete(a);
+  }
+  setAxis(name: Axis, value: number) {
+    this.axes[name] = value;
+  }
+  addLook(dx: number, dy: number) {
+    this.mouseDX += dx;
+    this.mouseDY += dy;
+  }
+
+  /** clip tools only: everything else uses actions */
+  debugKey(code: string) {
+    return this.pressedSet.has(code);
   }
 
   /** Call at the end of each frame. */
   endFrame() {
     this.pressedSet.clear();
-    this.releasedSet.clear();
+    this.virtualPressed.clear();
     this.mouseDX = this.mouseDY = 0;
-    this.wheel = 0;
     this.mousePressed = [false, false, false];
   }
 }

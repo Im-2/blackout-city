@@ -1,4 +1,4 @@
-// Fast travel: a taxi stand in every district plus one at the safehouse door.
+// Fast travel: a taxi stand in every district plus one at your front door.
 // E opens the menu; Up/Down pick, Enter goes, Backspace closes. Cabs won't touch
 // you while you're hot, and the driver waves the fee if you're broke.
 import * as THREE from 'three';
@@ -26,7 +26,7 @@ export class FastTravel {
     const at = (bi: number, bj: number) => { const b = blockBounds(bi, bj); return { x: b.x0 + 7, z: b.z0 + 1.6 }; };
     const defs: [District, number, number][] = [['downtown', 5, 4], ['oldtown', 2, 6], ['docks', 10, 6], ['residential', 2, 1], ['park', 6, 11]];
     for (const [d, bi, bj] of defs) this.stands.push({ name: DISTRICTS[d].name, district: d, ...at(bi, bj) });
-    this.stands.push({ name: 'Safehouse', district: 'home', x: -24, z: 50.9 - 3.5 });
+    this.stands.push({ name: 'Home', district: 'home', x: -24, z: 50.9 - 3.5 });
     const b = new GeoBuilder();
     this.stands.forEach((s, i) => {
       b.cbox(s.x, CURB_H + 1.4, s.z, 0.12, 2.8, 0.12, { color: '#3a3c3e' });
@@ -59,18 +59,18 @@ export class FastTravel {
     const inp = g.input;
     if (this.justOpened) { this.justOpened = false; return; } // the E press that opened it
     const n = this.stands.length;
-    if (inp.pressed('ArrowDown', 'KeyS')) { this.sel = (this.sel + 1) % n; if (this.sel === this.from) this.sel = (this.sel + 1) % n; }
-    if (inp.pressed('ArrowUp', 'KeyW')) { this.sel = (this.sel - 1 + n) % n; if (this.sel === this.from) this.sel = (this.sel - 1 + n) % n; }
-    if (inp.pressed('Backspace', 'KeyE')) { this.open = false; return; }
+    if (inp.pressed('menuDown')) { this.sel = (this.sel + 1) % n; if (this.sel === this.from) this.sel = (this.sel + 1) % n; }
+    if (inp.pressed('menuUp')) { this.sel = (this.sel - 1 + n) % n; if (this.sel === this.from) this.sel = (this.sel - 1 + n) % n; }
+    if (inp.pressed('back', 'interact')) { this.open = false; return; }
     if (g.police.heat > 0) { this.open = false; return; }
-    if (inp.pressed('Enter')) this.go(this.stands[this.sel]);
+    if (inp.pressed('confirm')) this.go(this.stands[this.sel]);
   }
 
   private go(s: Stand) {
     const g = this.g;
     this.open = false;
     const broke = g.save.data.cash < FEE;
-    if (!broke) { g.save.data.cash -= FEE; g.save.write(); g.audio.cash(); }
+    if (!broke) { g.save.data.cash -= FEE; g.audio.cash(); }
     g.fadeTeleport(s.x + 1.6, CURB_H, s.z + 1.2, 0, `${s.name.toUpperCase()}${broke ? ' — THIS ONE\'S ON THE DRIVER' : ` — $${FEE}`}`);
   }
 

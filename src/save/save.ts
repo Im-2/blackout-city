@@ -1,6 +1,9 @@
-// Persistent progress: missions, cash, reputation, vehicles, upgrades. Every
-// localStorage touch is guarded, so private windows just lose it on reload.
+// Progress: missions, cash, reputation, vehicles, upgrades. Lives in memory until
+// the player sleeps at home, which is the only thing that commits it (New Game
+// wipes it too). Every localStorage touch is guarded, so private windows just lose
+// it on reload.
 export interface LootItem { id: string; name: string; value: number; }
+export interface OwnedVehicle { kind: string; color: string; label: string; }
 
 export interface SaveData {
   cash: number;
@@ -12,7 +15,13 @@ export interface SaveData {
   escapes: Record<string, number>; // escape method usage (adaptive police)
   completed: Record<string, { n: number; best: number }>;
   rep: { overall: number; districts: Record<string, number> };
-  ownedVehicles: string[];
+  /** every vehicle ever parked at home */
+  ownedVehicles: OwnedVehicle[];
+  /** what's in the garage bay */
+  garage: OwnedVehicle | null;
+  /** lifetime cash, for the trophy shelf */
+  earned: number;
+  hour: number;
   /** clip tool: every mission open */
   unlockAll: boolean;
 }
@@ -30,6 +39,9 @@ const fresh = (): SaveData => ({
   completed: {},
   rep: { overall: 0, districts: {} },
   ownedVehicles: [],
+  garage: null,
+  earned: 0,
+  hour: 17.6,
   unlockAll: false,
 });
 
@@ -43,7 +55,7 @@ export class Save {
     } catch { /* storage blocked: progress lasts for the session */ }
   }
 
-  write() {
+  commit() {
     try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* ignore */ }
   }
 
@@ -53,12 +65,11 @@ export class Save {
 
   wipe() {
     this.data = fresh();
-    this.write();
+    this.commit();
   }
 
   /** count an escape method (subway/garage/rooftop/sewer/hide) for adaptive police */
   escape(kind: string) {
     this.data.escapes[kind] = (this.data.escapes[kind] ?? 0) + 1;
-    this.write();
   }
 }

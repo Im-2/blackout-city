@@ -43,11 +43,13 @@ import { FastTravel } from '../map/fasttravel';
 import { Gps } from '../map/gps';
 import { Missions } from '../missions/missions';
 import { FullMap } from '../ui/fullmap';
+import { HomeUi } from '../ui/homeui';
+import { Home } from '../world/home';
 
-export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results' | 'map';
+export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results' | 'map' | 'menu';
 
-/** new games and reloads begin at the safehouse door */
-const HOME = { x: -24, z: 48.6, heading: 0 };
+/** new games and reloads begin in the bedroom at home */
+const HOME = Home.START;
 
 // rAF doesn't fire in background tabs; fall back to a timeout so loading never stalls.
 const nextFrame = () => new Promise<void>((r) => { requestAnimationFrame(() => r()); setTimeout(r, 50); });
@@ -94,9 +96,11 @@ export class Game {
   gps!: Gps;
   missions!: Missions;
   map!: FullMap;
+  home!: Home;
+  homeUi!: HomeUi;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
-  private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean } | null = null;
+  private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean; mid?: () => void } | null = null;
   debugOverlay = false;
   frameMs = 16;
   private shadowTick = 0;
@@ -185,11 +189,13 @@ export class Game {
     this.hack = new HackSystem(this);
     await step(0.82, 'opening shops');
     this.buildings = new Buildings(this).build();
+    this.home = this.buildings.home;
     this.escapes = new Escapes(this).build();
     this.travel = new FastTravel(this).build();
     this.gps = new Gps(this);
     this.missions = new Missions(this);
     this.map = new FullMap(this);
+    this.homeUi = new HomeUi(this);
     this.hack.build();
     this.heist = new Heist(this);
     this.news = new News(this);
@@ -239,7 +245,7 @@ export class Game {
     });
   }
 
-  /** wipes progress and starts over at the safehouse */
+  /** wipes progress and starts over at home */
   newGame() {
     this.save.wipe();
     this.routes.clear();
@@ -248,7 +254,7 @@ export class Game {
     this.reset(false);
     this.play();
     this.hud.toast('NEW GAME', 'hack');
-    this.hud.hint('Press M for the map. Walk or drive into a marker to start a mission.');
+    this.hud.hint('You\'re home. E at the front door to head out, M for the map.');
   }
 
   private startPlaying() {
@@ -258,7 +264,7 @@ export class Game {
     this.input.lock();
     if (!this.clipMode) {
       this.hud.toast('CUT THE POWER. ROB THE CITY.', 'hack');
-      this.hud.hint('Press M for the map. Walk or drive into a marker to start a mission.');
+      this.hud.hint('You\'re home. E at the front door to head out, M for the map.');
     }
   }
 
@@ -350,6 +356,8 @@ export class Game {
     }
     this.news.reset();
     this.disguise.reset();
+    this.home.onWorldReset();
+    this.home.refreshDisplays();
 
     if (clip) {
       // instant chase: mid-city, next to the getaway car, heat 3
@@ -426,9 +434,11 @@ export class Game {
   }
 
   /** cut-to-black teleport (elevators, subway, sewers) */
-  fadeTeleport(x: number, y: number, z: number, heading: number, label: string) {
-    this.fade = { t: 0, to: new THREE.Vector3(x, y, z), heading, label, done: false };
+  fadeTeleport(x: number, y: number, z: number, heading: number, label: string, mid?: () => void) {
+    this.fade = { t: 0, to: new THREE.Vector3(x, y, z), heading, label, done: false, mid };
   }
+
+  get fading() { return !!this.fade && !this.fade.done; }
 
   isVisible(x: number, y: number, z: number) {
     return this.frustum.containsPoint(new THREE.Vector3(x, y, z));
@@ -483,7 +493,6 @@ export class Game {
   private freeRoamBusted() {
     const fine = Math.min(this.save.data.cash, 250);
     this.save.data.cash -= fine;
-    this.save.write();
     this.police.reset();
     this.fadeTeleport(84, 0.15, 8, 0, fine ? `RELEASED — $${fine} FINE` : 'RELEASED WITH A WARNING');
   }
@@ -500,16 +509,17 @@ export class Game {
     const inp = this.input;
 
     // global keys
-    if (inp.pressed('KeyH')) this.hud.setVisible(!this.hud.visible);
-    if (inp.pressed('F2')) this.hud.setPhoto(!this.hud.photo);
-    if (inp.pressed('KeyZ')) this.hud.toast(this.audio.toggleMute() ? 'MUTED' : 'SOUND ON', 'dim');
-    if (inp.pressed('F3')) this.debugOverlay = !this.debugOverlay;
-    if (inp.pressed('F4')) this.quality.cycle();
-    if (inp.pressed('KeyR') && (this.state === 'playing' || this.state === 'paused') && this.missions.run && !this.missions.ended) this.missions.retry(false);
-    if (inp.pressed('Escape') && this.state === 'paused') this.resume();
-    else if (inp.pressed('KeyP') && this.state === 'playing') { this.input.unlock(); this.pause(); }
+    if (inp.pressed('toggleHud')) this.hud.setVisible(!this.hud.visible);
+    if (inp.pressed('photoMode')) this.hud.setPhoto(!this.hud.photo);
+    if (inp.pressed('mute')) this.hud.toast(this.audio.toggleMute() ? 'MUTED' : 'SOUND ON', 'dim');
+    if (inp.pressed('debugOverlay')) this.debugOverlay = !this.debugOverlay;
+    if (inp.pressed('cycleQuality')) this.quality.cycle();
+    if (inp.pressed('retry') && (this.state === 'playing' || this.state === 'paused') && this.missions.run && !this.missions.ended) this.missions.retry(false);
+    if (inp.pressed('escape') && this.state === 'paused') this.resume();
+    else if (inp.pressed('pause') && this.state === 'playing') { this.input.unlock(); this.pause(); }
     if (this.state === 'map') this.map.update(realDt);
-    else if (inp.pressed('KeyM') && (this.state === 'playing' || this.state === 'paused')) this.map.show(this.state);
+    else if (this.state === 'menu') this.homeUi.update();
+    else if (inp.pressed('map') && (this.state === 'playing' || this.state === 'paused')) this.map.show(this.state);
 
     if (this.hud.root.dataset.state !== this.state) this.hud.root.dataset.state = this.state;
     if (this.state === 'playing') this.update(realDt);
@@ -540,7 +550,8 @@ export class Game {
     const sh = this.env.sun.shadow;
     sh.autoUpdate = false;
     this.shadowTick++;
-    sh.needsUpdate = this.quality.level >= 2 || this.shadowTick % 2 === 0;
+    // the flat is unlit by the sun, so nothing in view needs fresh shadows
+    sh.needsUpdate = !this.home?.inHouse && (this.quality.level >= 2 || this.shadowTick % 2 === 0);
     this.renderer.info.reset();
     this.post.render(this.scene, this.camera, realDt, this.time);
     inp.endFrame();
@@ -586,6 +597,7 @@ export class Game {
     this.escapes.update(dt);
     this.jobs.update(dt);
     this.world.update(dt);
+    this.home.update(dt, realDt);
     this.updateFade(realDt);
     this.news.update(realDt);
     this.hack.update(realDt, dt);
@@ -633,11 +645,12 @@ export class Game {
     (this.post.mat.uniforms.uFlashColor.value as THREE.Color).set('#000000');
     if (!f.done && f.t > 0.35) {
       f.done = true;
+      f.mid?.();
       const v = this.player.vehicle;
       if (v) { v.place(f.to.x, f.to.z, f.heading); v.pos.y = f.to.y; }
       else { this.player.spawn(f.to.x, f.to.z, f.heading); this.player.pos.y = f.to.y; }
       this.camRig.snapBehind(f.heading);
-      this.hud.toast(f.label, 'dim');
+      if (f.label) this.hud.toast(f.label, 'dim');
     }
     if (f.t > 0.75) this.fade = null;
   }

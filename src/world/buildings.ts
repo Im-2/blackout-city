@@ -2,7 +2,7 @@
 // built with the Kit when the player gets close and streamed out when far.
 //  - Shop row (block 2,3): MART 24 (register robbery), GEMS & CO (lasers,
 //    cases, safe), PAWN & LOAN (fence: sell loot, buy clothes)
-//  - Safehouse apartment (behind the shops): wardrobe, stash, upgrades, bed
+//  - The player's home + garage (behind the shops): see home.ts
 //  - Police station (block 4,3): records room hack, cells, officers
 //  - Parking garage (block 3,4): 3 levels, ramps, respray booth, cars to swap
 //  - Office tower (block 3,3): lobby security, elevator, server room, rooftop
@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { PAL } from '../core/palette';
 import { Rng } from '../core/math';
 import { Kit } from './interior';
+import { Home } from './home';
 import { GeoBuilder } from './geo';
 import { worldMat } from '../render/patch';
 import { worldMaterials } from './materials';
@@ -31,6 +32,8 @@ export interface Site {
   x0: number; z0: number; x1: number; z1: number;
   door: { x: number; z: number; heading: number };
   ceiling: number;
+  /** ignored above this height (so the roof isn't "inside") */
+  maxY?: number;
   /** street-facing approach point used for teleports */
   approach: { x: number; z: number; heading: number };
   kit: Kit | null;
@@ -61,7 +64,8 @@ export class Buildings {
   sites: Site[] = [];
   ladders: Ladder[] = [];
   ziplines: Zipline[] = [];
-  private ext = new GeoBuilder();
+  ext = new GeoBuilder();
+  home!: Home;
   private extFacade = new Map<string, GeoBuilder>();
   private rng = new Rng(808);
   private t = 0;
@@ -73,14 +77,14 @@ export class Buildings {
     for (const [name, [bi, bj]] of Object.entries(RESERVED)) city.reserved.set(bj * BLOCKS + bi, name);
   }
 
-  private facade(style: string) {
+  facade(style: string) {
     let b = this.extFacade.get(style);
     if (!b) this.extFacade.set(style, (b = new GeoBuilder()));
     return b;
   }
 
   /** hollow shell walls (facade outside) with door gaps + roof; solid above `solidFrom` */
-  private shell(x0: number, z0: number, x1: number, z1: number, top: number, style: string, doors: { side: 'n' | 's' | 'e' | 'w'; at: number; w: number; h: number }[], trim = '#6b6760') {
+  shell(x0: number, z0: number, x1: number, z1: number, top: number, style: string, doors: { side: 'n' | 's' | 'e' | 'w'; at: number; w: number; h: number }[], trim = '#6b6760') {
     const g = this.g;
     const f = this.facade(style);
     const tile = (worldMaterials().facades as Record<string, { tile: [number, number] }>)[style].tile;
@@ -113,7 +117,8 @@ export class Buildings {
   build() {
     const g = this.g;
     this.buildShops();
-    this.buildSafehouse();
+    this.home = new Home(g, this);
+    this.home.buildExterior();
     this.buildPolice();
     this.buildGarage();
     this.buildTower();
@@ -135,7 +140,7 @@ export class Buildings {
     return this;
   }
 
-  private site(p: Omit<Site, 'kit' | 'hackables' | 'interactables' | 'npcs' | 'cams' | 'guards' | 'state'>): Site {
+  site(p: Omit<Site, 'kit' | 'hackables' | 'interactables' | 'npcs' | 'cams' | 'guards' | 'state'>): Site {
     const s: Site = { ...p, kit: null, hackables: [], interactables: [], npcs: [], cams: [], guards: [], state: {} };
     this.sites.push(s);
     return s;
@@ -321,46 +326,6 @@ export class Buildings {
     });
   }
 
-  // ------------------------------------------------------------------ safehouse
-  private buildSafehouse() {
-    const g = this.g;
-    const x0 = -45, x1 = -11, z0 = 27, z1 = 45;
-    // ground floor shell + solid upper floors
-    this.shell(x0, z0, x1, z1, 4.4, 'brick', [{ side: 's', at: -28, w: 1.6, h: 2.6 }], '#5e4636');
-    const f = this.facade('brick');
-    f.box(x0, 4.4, z0, x1, 11.2, z1, { tile: [16, 13.6], skip: { ny: true } });
-    g.col.add(x0, 4.4, z0, x1, 11.2, z1, true, 'building');
-    surfaces.push({ x0, z0, x1, z1, h0: 11.2 });
-    this.ext.box(x0 - 0.3, 11.2, z0 - 0.3, x1 + 0.3, 11.6, z1 + 0.3, { color: '#5e4636', shadeSides: true });
-    this.sign('APTS', -28, 3.4, 45.18, 0, 2.6, '#2f3b4d', '#ffd27a');
-    this.site({
-      id: 'safehouse', name: 'Safehouse', open: true, x0: -44.5, z0: 27.5, x1: -11.5, z1: 44.5, ceiling: 4.2,
-      door: { x: -28, z: 46, heading: 0 }, approach: { x: -28, z: 48, heading: Math.PI },
-      build: (k, s) => {
-        k.room(-44.5, 27.5, -11.5, 44.5, { h: 4.2, floor: '#7a5a3a', floor2: '#6b4e32', wall: '#a89c86', skip: ['n', 's', 'e', 'w'] });
-        // furniture
-        k.block(-42.5, 0.15, 29, -38.5, 0.7, 31.2, '#6e3f5c'); // bed
-        k.props.box(-42.5, 0.7, 29, -41.5, 0.9, 31.2, { color: '#e6e0d4' });
-        k.block(-30, 0.15, 30.5, -26, 0.6, 31.4, '#3e5870'); // sofa
-        k.props.box(-30, 0.6, 30.5, -26, 1.3, 30.8, { color: '#3e5870' });
-        k.block(-29, 0.15, 34, -27, 0.55, 35, '#6b4a30'); // table
-        k.glow.cbox(-28, 1.4, 28.0, 2.2, 1.2, 0.05, { color: '#5aa0a8' }); // tv
-        k.block(-44.3, 0.15, 36, -43.0, 2.4, 39, '#5b4330', true); // wardrobe
-        k.block(-15, 0.15, 30, -12, 0.95, 31.4, '#3a3c3e'); // desk
-        k.glow.cbox(-13.5, 1.3, 30.5, 1.0, 0.5, 0.05, { color: '#46e6ff' }); // terminal
-        k.block(-13, 0.15, 40, -12, 1.4, 41.5, '#4a4c4e'); // stash safe
-        k.props.cbox(-36, 0.16, 38, 3.5, 0.02, 2.5, { color: '#9b3b2f' }); // rug
-        s.interactables.push(
-          { pos: new THREE.Vector3(-42.4, 0.15, 36.4), radius: 1.1, label: 'Wardrobe: change outfit', enabled: () => true, action: () => g.shop.cycleOutfit() },
-          { pos: new THREE.Vector3(-13.6, 0.15, 32.2), radius: 1.9, label: 'Upgrade terminal', enabled: () => true, action: () => g.shop.buyUpgrade() },
-          { pos: new THREE.Vector3(-13.6, 0.15, 39.0), radius: 1.9, label: 'Stash loot (safe from busts)', enabled: () => g.loot.carried.length > 0, action: () => g.loot.stashAll() },
-          { pos: new THREE.Vector3(-40.4, 0.15, 32.2), radius: 1.9, label: 'Sleep: save game & cool off', enabled: () => true, action: () => g.shop.sleep() },
-        );
-        this.hide(s, new THREE.Vector3(-42.4, 0.15, 38.6), 'Hide in wardrobe');
-      },
-    });
-  }
-
   // ------------------------------------------------------------------ police
   private buildPolice() {
     const g = this.g;
@@ -524,7 +489,6 @@ export class Buildings {
         s.state.boothT = 0;
         s.tick = () => {
           const v = g.player.vehicle;
-          g.carAction = null;
           if (v && v.pos.x > 13 && v.pos.x < 21 && v.pos.z > 90 && v.pos.z < 99 && v.pos.y < 1 && v.speedAbs < 2.5)
             g.carAction = { label: `Respray ${v.label.toLowerCase()} ($200)`, action: () => g.shop.respray(v) };
         };
@@ -673,7 +637,7 @@ export class Buildings {
         { pos: new THREE.Vector3(L.topX, L.top, L.topZ), radius: 1.6, label: 'Climb down', enabled: () => !g.player.vehicle, action: () => g.player.climb(L, false) },
       );
     };
-    // hand-placed: safehouse back wall, police station side, shop roof
+    // hand-placed: home's street wall, police station side, shop roof
     add(-14, 45.4, 11.2 + 0.3 - 0.3, 0);
     add(99.4, 30, 7.0, Math.PI / 2);
     add(-11.6, 20, 5.2, Math.PI / 2);
@@ -778,7 +742,7 @@ export class Buildings {
 
   // ------------------------------------------------------------------ runtime
   siteAt(x: number, z: number, y = 0): Site | null {
-    for (const s of this.sites) if (s.open && x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && (s.id !== 'tower' || y < 46)) return s;
+    for (const s of this.sites) if (s.open && x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && (s.id !== 'tower' || y < 46) && (s.maxY === undefined || y < s.maxY)) return s;
     return null;
   }
 
@@ -815,6 +779,7 @@ export class Buildings {
   update(dt: number) {
     const g = this.g;
     this.t += dt;
+    g.carAction = null;
     const P = g.player.worldPos;
     for (const s of this.sites) {
       const cx = (s.x0 + s.x1) / 2, cz = (s.z0 + s.z1) / 2;

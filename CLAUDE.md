@@ -18,6 +18,7 @@ tight, great-feeling, good-looking slice beats a big empty map.
 - Repeated geometry: `InstancedMesh` (trees, lamps, signal lamps, skyline, particles, skid marks). Static geometry is merged per block per material with `GeoBuilder`.
 - Characters: one `SkinnedMesh` per character (rigid bone weights, single draw call), shared skeleton layout for player/cops/peds/guards. GLBs in `/assets/models` override procedural rigs when present.
 - No guns, no copyrighted characters/music/logos. All audio is synthesized with WebAudio.
+- **Input:** gameplay never checks raw keys. It asks `input.pressed('interact')`, `input.held('handbrake')`, `input.moveX`, `input.lookX` and so on; `BINDINGS` in `core/input.ts` is the only place keys and mouse buttons are named. Add an `Action` there for anything new. `press()`/`release()`/`setAxis()`/`addLook()` are the hooks for touch controls. Only `debug/debug.ts` reads raw keys (`debugKey`, clip tools). Full-map drag and wheel, and clicks on DOM buttons, are still DOM events.
 - Keep 60 fps on a mid-range laptop: watch draw calls, shadow map 2048, fog ~70–270 m.
 - After each build step: run the dev server, test, fix errors, commit with a clear message.
 
@@ -28,7 +29,8 @@ tight, great-feeling, good-looking slice beats a big empty map.
 - Road graph: 13×13 intersections (one skipped by the overpass), `RoadGraph` (Dijkstra paths, street names). The perimeter is `RING`, the highway.
 - The Bank: block (4,5), front faces Union Blvd (z = 0). Interior floor y = 0.95.
 - Drop point: Old Garage in block (8,8), roll-up door facing west.
-- Player start: the safehouse door (-24, 48.6), `HOME` in `core/game.ts`, in free roam.
+- Player start: the bedroom at home (-30.6, 32.6), `Home.START` in `world/home.ts`, in free roam.
+- Home: block (5,6) south half, x -45..-11, z 27..45, facing the street at z = 56. Front door (-28, 45), garage door centred on x = -39.75.
 
 ## File map
 ```
@@ -38,7 +40,7 @@ src/
   core/
     palette.ts            all colours (art bible)
     math.ts               RNG (mulberry32), damp/lerp/angle helpers
-    input.ts              keyboard/mouse, pointer lock, per-frame edges
+    input.ts              named input actions + bindings, axes, hooks for touch; pointer lock
     game.ts               Game: owns every system, update order, state machine
     quality.ts            quality presets + automatic downgrade
     economy.ts            Loot (carried, fence, stash) + Shop (upgrades, outfits, respray)
@@ -61,6 +63,7 @@ src/
     streetlife.ts         carts, ATMs, bus stops, cell towers, vents, crowd spots
     interior.ts           Kit: modular rooms/props/colliders/surfaces, streamable
     buildings.ts          enterable buildings, ladders, ziplines, per-site alarms
+    home.ts               the player's home + garage: baked lighting, furniture, TV, displays, parking
   characters/
     skins.ts              colour/detail specs from the reference sheets
     rig.ts                procedural SkinnedMesh rig + animations
@@ -96,6 +99,7 @@ src/
     gps.ts                waypoint, road-graph route, chevrons on the road
   ui/hud.ts               HUD, minimap, toasts, screens, phone, escape list, mission card + end screens
   ui/fullmap.ts           full map (M): pan, zoom, markers, places, police, waypoint
+  ui/homeui.ts            home screens: hacker desk tabs, wardrobe, stash, trophies
   ui/news.ts              radio lines + billboard ticker
   audio/audio.ts          WebAudio synth (engine, siren, hacks, ambience)
   debug/debug.ts          clip/debug keys, ?clip mode
@@ -145,6 +149,14 @@ assets/                   reference art (not shipped) + optional models/
 - **Free-roam bust:** fine up to $250, heat cleared, released outside the police station at (84, 8). A bust during a mission opens the fail screen instead.
 - **Keys:** M = full map (click = waypoint, right-click clears, drag = pan, wheel = zoom). Mute moved from M to Z. R retries only while a mission is running. Clip: backtick = unlock all missions, L = reset to the heist's escape step. `?clip` starts at that step too.
 - **Save:** `blackoutcity.save.v1` holds completed missions (count, best time), reputation (overall + per district), owned vehicles and `unlockAll` on top of the older fields. The title shows CONTINUE + NEW GAME when progress exists. New Game on the title and pause screens asks for a second click, then wipes the save.
+- **Part 1, the home (`world/home.ts`, screens in `ui/homeui.ts`):** replaces the old safehouse on the same lot, in Residential. A ground-floor flat (living room, kitchen, bedroom, bathroom, hacker den) with a garage beside it. New games and reloads start in the bedroom. The front door has no gap in the wall: E + fade at the door each way, so nothing can walk in. Same for the door between the flat and the garage.
+- **Home lighting:** `bake()` multiplies vertex colours by a `LAMPS` list at stream-in (lamps only light their own room), drawn with an unlit material, so warmth is one draw call and ignores the sun and the clock. Rooms are painted as inward-facing quads 1.5 cm proud of the shell (or they z-fight). Hex colours go in through `** 2.2` because the material is unlit. While inside, `post.warm` warms the grade and softens the vignette, and the hemisphere light turns warm so the player's model matches. The windows are real gaps: the street outside is the live street.
+- **Save rule:** only sleeping in the bed writes to `localStorage` (`save.commit()`), and New Game wipes it. Everything else, mission rewards included, stays in memory until then, and a hint after each mission says so. The bed refuses while heat > 0 or during a mission. Sleeping skips 8 hours and the hour is saved. Carried loot isn't saved: the bed warns you to stash it.
+- **Police and the home:** `g.home.inside` covers the flat and the garage. Inside, they can't see you or bust you, `lastKnown` is pinned to the front door, cars pull up within 22 m and deploy officers (cap 6) who wait on the pavement via `home.stakeout()`, and heat decays 5× slower than normal (`dt / 35`). Walking out puts you straight back in a pursuit. The garage door stays shut while heat > 0 unless you're inside it.
+- **Garage + collection:** stop in the garage with a vehicle and E parks it (`g.carAction`). New kind + colour pairs join `save.ownedVehicles`, and `save.garage` is what waits in the bay after a reset. The bay holds one vehicle; the desk's COLLECTION tab swaps in any you own. Parked vehicles appear as model cars on the den shelf.
+- **Other home interactions:** bed, wardrobe (outfit list), hacker desk (tabs: missions + GPS, map, collection, reputation, upgrades), stash safe (stash loot, or take it back out to sell), trophy shelf (cups per mission, stash goods, cash bricks from `save.earned`), coffee machine (fills hack energy). `home.refreshDisplays()` rebuilds the shelves. The TV draws `news.ticker` to a canvas at 12 Hz and the big monitor shows a live police map at 2.5 Hz, both only while you're in the flat.
+- **Map icons:** green house = home (minimap: always pinned; full map: tooltip), green `G` = your garage, gold `TAXI` includes a Home stand beside the front door. New `GameState` `menu` freezes the world behind the home screens. `fadeTeleport` takes an optional callback at the black point, and `g.fading` freezes the player on foot.
+- **Camera:** the shoulder offset is clamped by a raycast (it could start behind a wall), the camera pulls in to 2.7 m in the flat, the on-foot minimum distance dropped from 0.6 m to 0.1 m (0.6 could land it behind the wall you're backed against), in the home it's pushed off walls by a 0.2 m circle, and the player model hides when the camera is within 0.55 m. Shadows don't refresh while you're in the flat. Vaulting now needs a clear line at head height, so it can't carry you through a wall.
 
 ## Testing notes
 - Plain screenshots of the preview pane can return a stale image; `zoom` over the full region captures a fresh frame.

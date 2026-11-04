@@ -16,7 +16,7 @@ interface JobDef { id: JobId; title: string; brief: string; pay: number; time: n
 const DEFS: JobDef[] = [
   { id: 'atm', title: 'ATM network', brief: 'Hack 3 marked ATMs before the bank patches them.', pay: 1500, time: 150 },
   { id: 'courier', title: 'Courier drop', brief: 'Grab the parcel and deliver it across town. No questions.', pay: 800, time: 95 },
-  { id: 'data', title: 'Data theft', brief: 'Copy the core server in Vantage Tower and bring the drive to your safehouse.', pay: 1000, time: 300 },
+  { id: 'data', title: 'Data theft', brief: 'Copy the core server in Vantage Tower and bring the drive home.', pay: 1000, time: 300 },
   { id: 'armored', title: 'Armored truck', brief: 'Stop the armored truck (red lights, ramming) and hack its rear lock.', pay: 5000, time: 180 },
   { id: 'evidence', title: 'Plant evidence', brief: 'Slip a package into a rival\'s SUV without a camera seeing you.', pay: 1000, time: 120 },
 ];
@@ -45,13 +45,13 @@ export class Jobs {
   input() {
     const inp = this.g.input;
     if (this.g.missions.run || this.g.missions.card) return;
-    if (inp.pressed('KeyJ')) {
+    if (inp.pressed('phone')) {
       if (!this.phoneOpen) { this.phoneOpen = true; this.g.audio.ring(); }
       else this.offer = (this.offer + 1) % DEFS.length;
     }
-    if (this.phoneOpen && inp.pressed('Enter')) { this.start(DEFS[this.offer]); this.phoneOpen = false; }
-    if (this.phoneOpen && inp.pressed('Escape', 'Backspace')) this.phoneOpen = false;
-    if (inp.pressed('KeyX') && this.active) { this.g.hud.toast('JOB ABANDONED', 'dim'); this.abandon(); }
+    if (this.phoneOpen && inp.pressed('confirm')) { this.start(DEFS[this.offer]); this.phoneOpen = false; }
+    if (this.phoneOpen && inp.pressed('escape', 'back')) this.phoneOpen = false;
+    if (inp.pressed('abandon') && this.active) { this.g.hud.toast('JOB ABANDONED', 'dim'); this.abandon(); }
   }
 
   private start(def: JobDef) {
@@ -168,7 +168,6 @@ export class Jobs {
       const g = this.g;
       g.loot.addCash(a.pay);
       g.save.data.jobsDone++;
-      g.save.write();
       this.completed++;
       g.audio.win();
       g.hud.toast(`JOB DONE: ${a.title.toUpperCase()} +$${a.pay.toLocaleString()}`, 'win');
@@ -212,8 +211,8 @@ export class Jobs {
     if (!a) return;
     a.t -= dt;
     if (a.t <= 0) { this.fail(); return; }
-    // data job finishes when you walk into the safehouse with the drive
-    if (a.id === 'data' && a.done[0] && this.g.buildings.siteAt(this.g.player.pos.x, this.g.player.pos.z)?.id === 'safehouse') { a.done[1] = true; this.check(); }
+    // data job finishes when you walk through your front door with the drive
+    if (a.id === 'data' && a.done[0] && this.g.buildings.siteAt(this.g.player.pos.x, this.g.player.pos.z)?.id === 'home') { a.done[1] = true; this.check(); }
     // armored truck stops when it's damaged enough
     if (a.id === 'armored' && this.truck && this.truck.hp < 110) { this.truck.throttle = 0; this.truck.handbrake = true; (this.truck.ai as { crashedT: number }).crashedT = 0.01; }
   }

@@ -80,11 +80,11 @@ export class Collision {
    * Boxes with top <= feetY + step are ignored (can be stepped onto).
    * Returns accumulated push normal (nx, nz) and count of hits.
    */
-  resolveCircle(p: { x: number; z: number }, r: number, feetY: number, step: number, headY: number, minTop = 0): { nx: number; nz: number; hits: number; depth: number } {
+  resolveCircle(p: { x: number; z: number }, r: number, feetY: number, step: number, headY: number, minTop = 0, occludersOnly = false): { nx: number; nz: number; hits: number; depth: number } {
     const res = { nx: 0, nz: 0, hits: 0, depth: 0 };
     const boxes = this.query(p.x - r, p.z - r, p.x + r, p.z + r, this.tmp);
     for (const b of boxes) {
-      if (b.maxY <= feetY + step || b.minY >= headY || b.maxY < minTop) continue;
+      if (b.maxY <= feetY + step || b.minY >= headY || b.maxY < minTop || (occludersOnly && !b.occluder)) continue;
       const cx = Math.max(b.minX, Math.min(p.x, b.maxX));
       const cz = Math.max(b.minZ, Math.min(p.z, b.maxZ));
       let dx = p.x - cx, dz = p.z - cz;

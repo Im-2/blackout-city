@@ -30,6 +30,9 @@ export class Kit {
   group = new THREE.Group();
   boxes: AABB[] = [];
   surfs: Surface[] = [];
+  /** unlit material + light bake for props (home) */
+  propsMat: THREE.Material | null = null;
+  bake: ((g: GeoBuilder) => void) | null = null;
   private built = false;
 
   constructor(private col: Collision) {}
@@ -157,9 +160,10 @@ export class Kit {
     if (this.built) return;
     this.built = true;
     if (!this.props.empty) {
-      const m = new THREE.Mesh(this.props.build(), worldMaterials().props);
-      m.castShadow = true;
-      m.receiveShadow = true;
+      this.bake?.(this.props);
+      const m = new THREE.Mesh(this.props.build(), this.propsMat ?? worldMaterials().props);
+      m.castShadow = !this.propsMat;
+      m.receiveShadow = !this.propsMat;
       this.group.add(m);
     }
     if (!this.glow.empty) this.group.add(new THREE.Mesh(this.glow.build(), worldMaterials().glow));

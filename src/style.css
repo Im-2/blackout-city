@@ -198,3 +198,21 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
 .map-legend .types { font-size: 15px; line-height: 1.1; }
 .map-help { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 18px; color: #e8e2d0; text-shadow: 2px 2px 0 #000; white-space: nowrap; pointer-events: none; }
 .screen .btn { flex: none; }
+
+.home-ui { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(620px, 92vw); max-height: 82vh; display: flex; flex-direction: column; padding: 10px 14px; pointer-events: auto; font-size: 20px; }
+.hu-head { display: flex; justify-content: space-between; font-size: 34px; letter-spacing: 3px; color: #fff1d0; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+.hu-head b { font-weight: normal; color: #bfe08a; font-size: 26px; letter-spacing: 0; }
+.hu-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
+.hu-tab { font: inherit; font-size: 19px; background: #1a2230; color: var(--dim); border: 2px solid var(--line); padding: 1px 10px; cursor: pointer; }
+.hu-tab.on { background: var(--cyan); color: #0a1218; border-color: var(--cyan); }
+.hu-list { overflow-y: auto; min-height: 120px; margin: 6px 0; }
+.hu-row { display: flex; gap: 8px; align-items: flex-start; padding: 4px 8px; border-left: 3px solid transparent; }
+.hu-row i { width: 12px; height: 12px; margin-top: 5px; flex: none; display: block; }
+.hu-row.can { cursor: pointer; }
+.hu-row.sel { background: rgba(70, 230, 255, 0.12); border-left-color: var(--cyan); }
+.hu-main { flex: 1; min-width: 0; }
+.hu-l { display: flex; justify-content: space-between; gap: 12px; color: #e8e2d0; }
+.hu-l em { font-style: normal; color: #ffd24a; white-space: nowrap; }
+.hu-sub { font-size: 16px; color: var(--dim); line-height: 1.05; text-transform: none; }
+.hu-row .bar { height: 7px; margin-top: 2px; }
+.hu-foot { font-size: 16px; color: var(--dim); border-top: 1px solid #22303d; padding-top: 4px; cursor: pointer; }

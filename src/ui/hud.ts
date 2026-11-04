@@ -26,8 +26,25 @@ const CONTROLS = `
   <div><b>Shift</b> in vehicle: boost</div><div><b>Hold E</b> pick a lock</div>
   <div><b>J</b> phone · <b>Enter</b> take job</div><div><b>X</b> abandon job</div>
   <div><b>E</b> at a taxi stand: fast travel</div><div><b>↑↓ Enter</b> pick a destination</div>
+  <div><b>E</b> at your front door: go home</div><div><b>Sleep</b> in your bed to save</div>
 </div>
 <div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> start heist's escape · <b>\`</b> unlock all · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
+
+/** the HOME icon, on the minimap and the full map */
+export function houseIcon(c: CanvasRenderingContext2D, x: number, y: number, s: number) {
+  c.fillStyle = '#0f141c';
+  c.fillRect(x - 11 * s, y - 11 * s, 22 * s, 22 * s);
+  c.fillStyle = '#7dffb0';
+  c.beginPath();
+  c.moveTo(x, y - 10 * s);
+  c.lineTo(x + 10 * s, y);
+  c.lineTo(x - 10 * s, y);
+  c.closePath();
+  c.fill();
+  c.fillRect(x - 7 * s, y, 14 * s, 9 * s);
+  c.fillStyle = '#0f141c';
+  c.fillRect(x - 2 * s, y + 3 * s, 4 * s, 6 * s);
+}
 
 function p2stale(g: Game) {
   const v = g.player.vehicle;
@@ -553,6 +570,14 @@ export class Hud {
         c.restore();
       }
     }
+    // home, always pinned on the map
+    const [hx, hz] = pin(-28, 46);
+    c.save();
+    c.translate(hx, hz);
+    c.rotate(-(Math.PI + yaw));
+    c.scale(1 / zoom, 1 / zoom);
+    houseIcon(c, 0, 0, 0.8);
+    c.restore();
     // current target
     const t = g.missionTarget();
     if (t) {
