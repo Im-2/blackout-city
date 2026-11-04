@@ -70,7 +70,8 @@ export class Post {
 
   constructor(private renderer: THREE.WebGLRenderer) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    this.rt = new THREE.WebGLRenderTarget(size.x, size.y, { samples: 4, type: THREE.HalfFloatType });
+    // 8-bit sRGB: half the bandwidth of half-float, no banding in the darks (big win on integrated GPUs)
+    this.rt = new THREE.WebGLRenderTarget(size.x, size.y, { samples: 4, type: THREE.UnsignedByteType, colorSpace: THREE.SRGBColorSpace });
     this.mat = new THREE.ShaderMaterial({
       vertexShader: vert,
       fragmentShader: frag,
@@ -88,6 +89,12 @@ export class Post {
       depthWrite: false,
     });
     this.quadScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat));
+  }
+
+  setSamples(n: number) {
+    if (this.rt.samples === n) return;
+    this.rt.samples = n;
+    this.rt.dispose();
   }
 
   setSize(w: number, h: number) {

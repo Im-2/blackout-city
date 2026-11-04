@@ -78,6 +78,7 @@ export class Escapes {
       k.props.box(px0, UG - 0.06, z + 5.5, px1, UG - 0.04, pz1, { color: '#2a2a28' });
       for (const rz of [6.4, 8.0]) k.props.box(px0, UG - 0.03, z + rz, px1, UG + 0.02, z + rz + 0.1, { color: '#8a8a84' });
       k.props.box(px0, UG, z + 5.3, px1, UG + 0.01, z + 5.5, { color: PAL.laneYellow });
+      k.solid(px0, UG, z + 5.5, px1, UG + 2.2, z + 5.7, false); // platform edge
       // turnstiles (hackable) + stairs block
       const gate: import('../world/collision').AABB[] = [];
       for (let gx = x - 4; gx <= x + 4; gx += 1.6) if (Math.abs(gx - x) > 0.5) gate.push(k.block(gx - 0.1, UG, z + 1.6, gx + 0.1, UG + 1.05, z + 2.0, '#5a5f64'));

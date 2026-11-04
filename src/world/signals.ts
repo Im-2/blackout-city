@@ -10,7 +10,11 @@ interface NodeSignal {
   t: number;
   green: 'x' | 'z';
   stage: 0 | 1 | 2; // 0 green, 1 yellow, 2 all-red
-  override: null | 'green' | 'red';
+  override: null | 'green' | 'red' | 'wave';
+  waveAxis: 'x' | 'z';
+  waveDir: [number, number];
+  /** red that police obey too (green wave closing behind the player) */
+  copStop: boolean;
   overrideT: number;
 }
 
@@ -30,6 +34,9 @@ export class Signals {
       green: (n.i + n.j) % 2 ? 'x' : 'z',
       stage: 0,
       override: null,
+      waveAxis: 'x' as 'x' | 'z',
+      waveDir: [0, 0] as [number, number],
+      copStop: false,
       overrideT: 0,
     }));
     const geo = new THREE.BoxGeometry(0.34, 0.34, 0.08);
@@ -43,6 +50,7 @@ export class Signals {
     const s = this.nodes[node];
     if (s.override === 'green') return 'green';
     if (s.override === 'red') return 'red';
+    if (s.override === 'wave') return axis === s.waveAxis ? 'green' : 'red';
     if (s.stage === 2) return 'red';
     if (s.green !== axis) return 'red';
     return s.stage === 1 ? 'yellow' : 'green';
@@ -51,7 +59,38 @@ export class Signals {
   hack(node: number, mode: 'green' | 'red', duration = 12) {
     const s = this.nodes[node];
     s.override = mode;
+    s.copStop = false;
     s.overrideT = duration;
+  }
+
+  /** Green for the driver's axis, red for cross traffic; flips to red behind them so pursuers stop. */
+  wave(node: number, axis: 'x' | 'z', dirX: number, dirZ: number, duration = 14) {
+    const s = this.nodes[node];
+    s.override = 'wave';
+    s.waveAxis = axis;
+    s.waveDir = [dirX, dirZ];
+    s.copStop = false;
+    s.overrideT = duration;
+  }
+
+  /** must a police car heading along `axis` stop at this node? */
+  copsHeld(node: number, axis: 'x' | 'z') {
+    const s = this.nodes[node];
+    return s.copStop || (s.override === 'wave' && axis !== s.waveAxis);
+  }
+
+  /** close each wave node once the player has driven past it */
+  followWave(px: number, pz: number) {
+    const G = this.city.graph.nodes;
+    this.nodes.forEach((s, i) => {
+      if (s.override !== 'wave') return;
+      const dx = px - G[i].x, dz = pz - G[i].z;
+      if (dx * s.waveDir[0] + dz * s.waveDir[1] > 10) { s.override = 'red'; s.copStop = true; s.overrideT = 7; }
+    });
+  }
+
+  reset() {
+    for (const s of this.nodes) { s.override = null; s.copStop = false; s.overrideT = 0; }
   }
 
   update(dt: number) {
@@ -59,7 +98,7 @@ export class Signals {
     for (const s of this.nodes) {
       if (s.override) {
         s.overrideT -= dt;
-        if (s.overrideT <= 0) s.override = null;
+        if (s.overrideT <= 0) { s.override = null; s.copStop = false; }
         continue;
       }
       s.t += dt;

@@ -99,8 +99,22 @@ export class HackSystem {
         kind: 'signal', label: 'Traffic lights', pos: new THREE.Vector3(n.x, 4.6, n.z), size: new THREE.Vector3(15, 1.8, 15), range: 45,
         available: () => !g.signals.nodes[n.id].override,
         act: (alt) => {
-          g.signals.hack(n.id, alt ? 'red' : 'green', 12);
           for (const h of g.city.signalHeads) if (h.node === n.id) g.fx.spawn('hack', h.pos, 8);
+          const v = g.player.vehicle;
+          if (v && !alt && v.speedAbs > 2) {
+            // GREEN WAVE: this light and the next two along your heading
+            const axis: 'x' | 'z' = Math.abs(v.vx) > Math.abs(v.vz) ? 'x' : 'z';
+            const dx = axis === 'x' ? Math.sign(v.vx) : 0, dz = axis === 'z' ? Math.sign(v.vz) : 0;
+            let cur = n;
+            for (let k = 0; k < 3; k++) {
+              if (cur.hasLight) g.signals.wave(cur.id, axis, dx, dz, 14 + k * 3);
+              const ni = cur.i + dx, nj = cur.j + dz;
+              if (ni < 0 || nj < 0 || ni > 6 || nj > 6) break;
+              cur = g.city.graph.node(ni, nj);
+            }
+            return 'GREEN WAVE — RED FOR THE COPS BEHIND YOU';
+          }
+          g.signals.hack(n.id, alt ? 'red' : 'green', 12);
           return alt ? 'ALL RED — GRIDLOCK' : 'ALL GREEN — CHAOS';
         },
       });
@@ -397,7 +411,7 @@ export class HackSystem {
       el.style.transform = `translate(${x | 0}px, ${y | 0}px) translate(-50%, -50%)`;
       el.className = 'hack-icon' + (sel ? ' sel' : '') + (avail ? '' : ' off') + ` k-${c.h.kind}`;
       const extra = sel
-        ? `<div class="hl">${c.h.label}</div><div class="hc">${!avail ? (c.h.kind === 'door' ? 'UNLOCKED' : c.h.kind === 'camera' ? 'BLINDED' : c.h.kind === 'signal' ? 'HACKED' : 'OFFLINE') : cd > 0 ? `COOLDOWN ${cd.toFixed(1)}s` : this.energy < info.cost ? 'LOW ENERGY' : `[LMB] HACK · ${info.cost}⚡${c.h.kind === 'signal' ? ' · [RMB] ALL RED' : ''}${c.h.kind === 'alarm' ? ((c.h.ref as Vehicle).locked ? ' UNLOCK · [RMB] ALARM' : ' ALARM') : ''}`}</div>`
+        ? `<div class="hl">${c.h.label}</div><div class="hc">${!avail ? (c.h.kind === 'door' ? 'UNLOCKED' : c.h.kind === 'camera' ? 'BLINDED' : c.h.kind === 'signal' ? 'HACKED' : 'OFFLINE') : cd > 0 ? `COOLDOWN ${cd.toFixed(1)}s` : this.energy < info.cost ? 'LOW ENERGY' : `[LMB] HACK · ${info.cost}⚡${c.h.kind === 'signal' ? (g.player.vehicle ? ' WAVE · [RMB] ALL RED' : ' · [RMB] ALL RED') : ''}${c.h.kind === 'alarm' ? ((c.h.ref as Vehicle).locked ? ' UNLOCK · [RMB] ALARM' : ' ALARM') : ''}`}</div>`
         : '';
       const html = `<div class="ht">${info.tag}</div>${extra}`;
       if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }

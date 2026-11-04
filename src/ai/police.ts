@@ -510,6 +510,14 @@ export class Police {
       u.throttle = clamp((want - u.speed) * 0.4, -1, 1);
       if (Math.abs(diff) > 2.0 && u.speedAbs < 6) ai.reverseT = 0.8;
     }
+    // green wave: pursuers stop at the lights closing behind the player
+    if (u.speedAbs > 0.5 || u.throttle > 0) {
+      const n = g.city.graph.nearestNode(u.pos.x, u.pos.z);
+      const ax = n.x - u.pos.x, az = n.z - u.pos.z;
+      const along = ax * Math.sin(u.heading) + az * Math.cos(u.heading);
+      const axis: 'x' | 'z' = Math.abs(Math.sin(u.heading)) > Math.abs(Math.cos(u.heading)) ? 'x' : 'z';
+      if (n.hasLight && along > 9 && along < 24 && g.signals.copsHeld(n.id, axis)) { u.throttle = u.speed > 1 ? -1 : 0; u.handbrake = false; }
+    }
     // stuck recovery
     if (u.throttle > 0.5 && u.speedAbs < 1.2) ai.stuckT += dt; else ai.stuckT = Math.max(0, ai.stuckT - dt);
     if (ai.stuckT > 1.1) { ai.stuckT = 0; ai.reverseT = 1.0; }

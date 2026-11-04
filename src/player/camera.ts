@@ -103,7 +103,7 @@ export class CameraRig {
     if (hit !== Infinity) dist = Math.max(0.6, hit - 0.3);
     this.pos.set(base.x + dx * dist, base.y + dy * dist, base.z + dz * dist);
     if (!v) this.pos.y = Math.min(this.pos.y, g.ceilingAt(g.player.pos.x, g.player.pos.z, g.player.pos.y) - 0.4);
-    this.pos.y = Math.max(this.pos.y, 0.4);
+    this.pos.y = Math.max(this.pos.y, g.player.pos.y < -2 ? g.player.pos.y + 0.4 : 0.4);
 
     // shake
     this.trauma = Math.max(0, this.trauma - dt * 1.4);

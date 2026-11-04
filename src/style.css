@@ -40,7 +40,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
 .energy .bar { height: 12px; background: #0b1016; border: 2px solid #22303d; margin: 4px 0 6px; }
 .energy .fill { height: 100%; background: repeating-linear-gradient(90deg, var(--cyan) 0 10px, #2bb6cc 10px 12px); box-shadow: 0 0 8px rgba(70, 230, 255, 0.5); transition: width 0.1s steps(4); }
 .energy .fill.low { background: #3a6670; box-shadow: none; }
-.cds { display: flex; gap: 4px; justify-content: center; }
+.cds { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; min-height: 20px; }
 .cd { position: relative; width: 46px; height: 20px; background: #10171f; border: 1px solid #22303d; font-size: 14px; line-height: 19px; color: #4a5866; overflow: hidden; }
 .cd.afford { color: var(--cyan); }
 .cd i { position: absolute; left: 0; bottom: 0; width: 100%; background: rgba(70, 230, 255, 0.25); }
@@ -58,8 +58,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
 
 .prompt { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); font-size: 26px; padding: 4px 14px; background: var(--panel); border: 2px solid var(--amber); color: #fff1d0; }
 
-.toasts { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.toast { font-size: 34px; letter-spacing: 3px; padding: 2px 16px; background: rgba(10, 14, 20, 0.7); color: var(--cyan); text-shadow: 2px 2px 0 #000; animation: pop 0.18s steps(3); transition: opacity 0.5s; white-space: nowrap; }
+.toasts { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); width: 86vw; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.toast { font-size: 34px; letter-spacing: 3px; padding: 2px 16px; background: rgba(10, 14, 20, 0.7); color: var(--cyan); text-shadow: 2px 2px 0 #000; animation: pop 0.18s steps(3); transition: opacity 0.5s; text-align: center; max-width: 86vw; width: max-content; box-sizing: border-box; }
 .toast.heat { color: #ff5a4a; }
 .toast.cool { color: var(--sage); }
 .toast.dim { color: var(--dim); font-size: 22px; }
@@ -135,8 +135,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
 @keyframes blink { 50% { opacity: 0.35; } }
 @keyframes pop { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
 
-@media (max-width: 760px) {
-  .objective { max-width: 60vw; }
+@media (max-width: 900px) {
+  .toast { font-size: 24px; letter-spacing: 1px; }
+  .objective { max-width: 48vw; }
+  .obj-main { font-size: 20px; }
+  .obj-sub { font-size: 15px; }
+  .heat { top: 18px; }
+  .star { width: 16px; height: 16px; }
+  .desc { max-width: 140px; }
+  .radio { left: 18px; bottom: 232px; }
   .energy { width: 260px; }
   .minimap { width: 130px; height: 130px; }
   .ctl-grid { grid-template-columns: 1fr; }
@@ -152,3 +159,18 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
 .debugov { position: absolute; right: 18px; top: 150px; white-space: pre; font-size: 16px; line-height: 1.05; color: #9fffb0; background: rgba(0,0,0,0.65); padding: 6px 8px; display: none; text-transform: none; }
 #ui:not([data-state='playing']) .witness { display: none !important; }
 #ui.hud-hidden .witness { display: none !important; }
+
+.money { font-size: 22px; color: #bfe08a; margin-top: 6px; border-top: 1px solid #22303d; padding-top: 3px; }
+.money span { color: var(--amber); font-size: 18px; }
+.job { font-size: 16px; color: var(--ink); }
+.job b { color: var(--cyan); font-weight: normal; }
+.job i { font-style: normal; color: var(--dim); }
+.phone { left: 18px; top: 190px; padding: 8px 12px; width: 340px; font-size: 20px; border-left: 4px solid var(--cyan); }
+.phone .sel { color: var(--cyan); }
+.phone em { font-style: normal; color: #bfe08a; float: right; }
+.phone .brief { font-size: 17px; color: var(--ink); margin: 6px 0; text-transform: none; }
+.escapes { right: 18px; bottom: 130px; padding: 5px 12px; font-size: 18px; min-width: 150px; color: #c8f0ff; border-right: 3px solid var(--cyan); }
+.escapes em { font-style: normal; float: right; margin-left: 14px; color: var(--dim); }
+.desc { font-size: 15px; color: var(--dim); max-width: 200px; margin-left: auto; }
+.desc .stale { color: var(--sage); }
+.screen .ctl-grid { font-size: 17px; }

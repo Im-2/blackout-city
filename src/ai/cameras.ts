@@ -152,7 +152,7 @@ export class SecurityCameras {
       const groundY = c.site === 'bank' ? g.bank.floorY + 0.03 : c.site ? c.pos.y - 3.6 : 0.2;
       c.cone.position.set(c.pos.x, groundY, c.pos.z);
       c.cone.rotation.y = c.yaw;
-      const showCone = !off && (c.bank || !!c.site || g.hack.active);
+      const showCone = !off && (c.bank || g.hack.active);
       c.cone.visible = showCone;
       const cm = c.cone.material as THREE.MeshBasicMaterial;
       cm.color.set(c.seeing ? '#ff3a2a' : g.hack.active ? '#46e6ff' : '#ff6a3a');

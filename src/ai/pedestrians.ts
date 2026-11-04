@@ -42,6 +42,7 @@ interface Agent {
   dog: THREE.Group | null;
   dist: number;
   panicCD: number;
+  off?: boolean; // over the quality budget: not simulated or drawn
 }
 
 const FULL_R = 52;
@@ -143,7 +144,7 @@ export class Pedestrians {
     for (const a of this.agents) { if (a.rig) g.scene.remove(a.rig.root); if (a.dog) g.scene.remove(a.dog); }
     this.agents = [];
     this.dogPool = [];
-    const total = g.quality.p.peds;
+    const total = 230; // max pool; quality.peds decides how many are live
     const r = this.rng;
     const life = g.street;
     const add = (type: PedType, role: Role, anchor: Agent['anchor']) => {
@@ -280,11 +281,16 @@ export class Pedestrians {
     const P = g.player.worldPos;
     this.screamT -= dt;
     this.lodT -= dt;
-    for (const a of this.agents) a.dist = Math.hypot(a.x - P.x, a.z - P.z);
+    const live = g.quality.p.peds;
+    this.agents.forEach((a, i) => {
+      a.dist = Math.hypot(a.x - P.x, a.z - P.z);
+      a.off = i >= live;
+    });
     if (this.lodT <= 0) { this.lodT = 0.3; this.assignLod(); }
 
     let calling = 0;
     for (const a of this.agents) {
+      if (a.off) continue;
       if (a.state === 'inside') { a.timer -= dt; if (a.timer <= 0) this.emerge(a); continue; }
       if (a.dist > GHOST_R + 30) { this.cheapUpdate(a, dt); continue; }
       a.panicCD -= dt;
@@ -510,7 +516,7 @@ export class Pedestrians {
   private assignLod() {
     const g = this.g;
     const max = g.quality.p.rigs;
-    const sorted = this.agents.filter((a) => a.state !== 'inside' && a.dist < FULL_R).sort((p, q) => p.dist - q.dist);
+    const sorted = this.agents.filter((a) => !a.off && a.state !== 'inside' && a.dist < FULL_R).sort((p, q) => p.dist - q.dist);
     const want = new Set(sorted.slice(0, max));
     let full = 0, created = 0;
     for (const a of this.agents) {
@@ -528,7 +534,7 @@ export class Pedestrians {
       if (f) full++;
     }
     this.stats.full = full;
-    this.stats.total = this.agents.length;
+    this.stats.total = Math.min(this.agents.length, g.quality.p.peds);
   }
 
   private drawGhosts() {
@@ -536,7 +542,7 @@ export class Pedestrians {
     let n = 0;
     const P = this.g.player.worldPos;
     for (const a of this.agents) {
-      if (a.full || a.state === 'inside' || a.dist > GHOST_R) continue;
+      if (a.off || a.full || a.state === 'inside' || a.dist > GHOST_R) continue;
       if (!this.g.isVisible(a.x, 1, a.z) && a.dist > 20) continue;
       const bob = a.v > 0.3 ? Math.abs(Math.sin(a.dist * 0.0 + performance.now() * 0.009 + a.lat * 10)) * 0.04 : 0;
       const sit = a.anchor?.anim === 'sit' && a.state === 'station' ? -0.45 : 0;

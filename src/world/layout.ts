@@ -59,7 +59,8 @@ export const surfaces: Surface[] = [];
 
 /** Highest surface under (x,z) that is not above curY + step (so you can drive under decks). */
 export function surfaceHeight(x: number, z: number, curY = 0, step = 0.7) {
-  let best = groundHeight(x, z);
+  // underground (metro) has no street above it to snap up to
+  let best = curY < -2 ? -Infinity : groundHeight(x, z);
   for (const s of surfaces) {
     if (x < s.x0 || x > s.x1 || z < s.z0 || z > s.z1) continue;
     let h = s.h0;

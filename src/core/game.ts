@@ -86,6 +86,7 @@ export class Game {
   private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean } | null = null;
   debugOverlay = false;
   frameMs = 16;
+  private shadowTick = 0;
   vehicles: Vehicle[] = [];
   parked: Vehicle[] = [];
   getawayCar: Vehicle | null = null;
@@ -112,7 +113,7 @@ export class Game {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.info.autoReset = false;
     this.input = new Input(canvas);
     this.quality = new Quality(this);
@@ -245,6 +246,7 @@ export class Game {
     this.hitstopT = 0;
     this.timeScale = 1;
     this.routes.newRun();
+    this.signals.reset();
     this.hack.reset();
     this.heist.reset(clip);
     this.police.reset();
@@ -374,6 +376,11 @@ export class Game {
     return y + s.ceiling;
   }
 
+  /** where the HUD marker points: the heist escape outranks a side job */
+  missionTarget(): THREE.Vector3 {
+    return (!this.heist.hasLoot && this.jobs.target()) || this.heist.target;
+  }
+
   /** cut-to-black teleport (elevators, subway, sewers) */
   fadeTeleport(x: number, y: number, z: number, heading: number, label: string) {
     this.fade = { t: 0, to: new THREE.Vector3(x, y, z), heading, label, done: false };
@@ -483,6 +490,11 @@ export class Game {
       this.camera.lookAt(P.x, P.y + 1, P.z);
       this.fx.update(realDt * 0.3);
     }
+    // lower presets refresh the shadow map at 30 Hz
+    const sh = this.env.sun.shadow;
+    sh.autoUpdate = false;
+    this.shadowTick++;
+    sh.needsUpdate = this.quality.level >= 2 || this.shadowTick % 2 === 0;
     this.renderer.info.reset();
     this.post.render(this.scene, this.camera, realDt, this.time);
     inp.endFrame();
@@ -513,6 +525,7 @@ export class Game {
     this.handleImpacts();
     this.skids.update(this.vehicles);
     this.signals.update(dt);
+    this.signals.followWave(this.player.worldPos.x, this.player.worldPos.z);
     this.cameras.update(dt);
     this.guards.update(dt);
     this.peds.update(dt);

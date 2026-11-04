@@ -64,7 +64,7 @@ export class Kit {
           g.box(x, y - 0.05, z, Math.min(x + 1.5, x1), y, Math.min(z + 1.5, z1), { color: odd ? o.floor2 : o.floor ?? '#8a857c', skip: { ny: true } });
         }
     } else g.box(x0, y - 0.05, z0, x1, y, z1, { color: o.floor ?? '#8a857c', skip: { ny: true } });
-    if (y > 0.2) {
+    if (Math.abs(y - 0.15) > 0.1) {
       this.surface({ x0, z0, x1, z1, h0: y });
       this.solid(x0, y - 0.3, z0, x1, y - 0.05, z1, false, 'floor');
     }

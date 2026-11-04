@@ -9,19 +9,20 @@ export interface QualityPreset {
   shadow: number; // shadow map size
   pixelRatio: number; // cap
   ambient: number; // pigeons/litter density multiplier
+  msaa: number; // render target samples
 }
 
 export const PRESETS: QualityPreset[] = [
-  { name: 'LOW', traffic: 12, peds: 90, rigs: 12, shadow: 1024, pixelRatio: 0.85, ambient: 0.4 },
-  { name: 'MEDIUM', traffic: 18, peds: 140, rigs: 20, shadow: 1024, pixelRatio: 1, ambient: 0.7 },
-  { name: 'HIGH', traffic: 26, peds: 190, rigs: 30, shadow: 2048, pixelRatio: 1.25, ambient: 1 },
-  { name: 'ULTRA', traffic: 32, peds: 230, rigs: 40, shadow: 2048, pixelRatio: 1.5, ambient: 1 },
+  { name: 'LOW', traffic: 12, peds: 90, rigs: 12, shadow: 1024, pixelRatio: 0.85, ambient: 0.4, msaa: 0 },
+  { name: 'MEDIUM', traffic: 18, peds: 140, rigs: 20, shadow: 1024, pixelRatio: 1, ambient: 0.7, msaa: 2 },
+  { name: 'HIGH', traffic: 26, peds: 190, rigs: 30, shadow: 2048, pixelRatio: 1.25, ambient: 1, msaa: 4 },
+  { name: 'ULTRA', traffic: 32, peds: 230, rigs: 40, shadow: 2048, pixelRatio: 1.5, ambient: 1, msaa: 4 },
 ];
 
 const BUDGET_MS = 1000 / 60;
 
 export class Quality {
-  level = 3;
+  level = 2; // start at HIGH; auto may step up to ULTRA with headroom
   auto = true;
   ema = 16;
   private slowT = 0;
@@ -66,6 +67,7 @@ export class Quality {
   apply() {
     const g = this.g;
     const p = this.p;
+    g.post.setSamples(p.msaa);
     g.renderer.setPixelRatio(Math.min(devicePixelRatio, p.pixelRatio));
     g.resize();
     const sh = g.env.sun.shadow;

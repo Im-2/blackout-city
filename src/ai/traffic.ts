@@ -250,6 +250,7 @@ export class Traffic {
           if (loc) this.apply(v, loc);
         }
       }
+      if (!ai.route && !ai.emergency && this.cars.length > this.target + 4 && d > 50 && !g.isVisible(v.pos.x, 1, v.pos.z)) { g.removeVehicle(v); this.cars.splice(i, 1); continue; }
       this.drive(v, dt);
     }
     const civ = this.cars.filter((v) => !(v.ai as DriveAI).route && !(v.ai as DriveAI).emergency).length;

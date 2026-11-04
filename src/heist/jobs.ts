@@ -65,7 +65,7 @@ export class Jobs {
           this.addHack({
             kind: 'atm', label: 'Marked ATM', pos: targets[i], size: new THREE.Vector3(1, 1.9, 1), range: 30,
             available: () => !!this.active && !this.active.done[i],
-            act: () => { this.active!.done[i] = true; g.fx.spawn('money', targets[i], 12); g.audio.cash(); this.check(); return `ATM ${this.active!.done.filter(Boolean).length}/3 DRAINED`; },
+            act: () => { this.active!.done[i] = true; g.fx.spawn('money', targets[i], 12); g.audio.cash(); const n = this.active!.done.filter(Boolean).length; this.check(); return `ATM ${n}/3 DRAINED`; },
           });
         });
         break;

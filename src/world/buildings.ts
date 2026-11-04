@@ -13,6 +13,7 @@ import { PAL } from '../core/palette';
 import { Rng } from '../core/math';
 import { Kit } from './interior';
 import { GeoBuilder } from './geo';
+import { worldMat } from '../render/patch';
 import { worldMaterials } from './materials';
 import { BLOCKS, CURB_H, surfaces } from './layout';
 import { RigCharacter } from '../characters/rig';
@@ -146,7 +147,7 @@ export class Buildings {
     k.finish(this.g.scene);
   }
 
-  private storefront(x0: number, x1: number, z: number, doorX: number, glow = '#d9b878') {
+  private storefront(x0: number, x1: number, z: number, doorX: number, glow = '#a8905c') {
     // big lit windows either side of the door, on the north face (z = wall plane)
     for (const [a, b] of [[x0 + 0.6, doorX - 1.2], [doorX + 1.2, x1 - 0.6]]) {
       if (b - a < 0.8) continue;
@@ -169,7 +170,7 @@ export class Buildings {
     ];
     this.shell(-45, z0, -11, z1, top, 'concrete', units.map((u) => ({ side: 'n' as const, at: u[3], w: 1.8, h: 2.6 })));
     for (const [id, x0, x1, dx, label, col] of units) {
-      this.storefront(x0, x1, z0, dx, id === 'jewel' ? '#c8a8d8' : '#d9b878');
+      this.storefront(x0, x1, z0, dx, id === 'jewel' ? '#8a7498' : '#a8905c');
       this.ext.box(x0 + 0.2, CURB_H + 3.3, z0 - 0.15, x1 - 0.2, CURB_H + 4.5, z0 - 0.02, { color: col });
       this.sign(label, (x0 + x1) / 2, CURB_H + 3.9, z0 - 0.17, Math.PI, Math.min(8, x1 - x0 - 1), col, '#fff1c0');
       if (x1 < -11.1) { g.col.add(x1 - 0.15, 0, z0, x1 + 0.15, top, z1, true, 'building'); this.ext.box(x1 - 0.15, CURB_H, z0 + 0.5, x1 + 0.15, top, z1 - 0.5, { color: '#a89c86' }); }
@@ -219,6 +220,16 @@ export class Buildings {
       restricted: { x0: -33.5, z0: 11.5, x1: -22.6, z1: 22.5 },
       build: (k, s) => {
         k.room(-33.5, 11.5, -22.6, 22.5, { h: 4.6, floor: '#2a2430', floor2: '#3a3442', wall: '#6e5a72', skip: ['n', 's', 'e', 'w'] });
+        // closed for the night: the street door has to be hacked open
+        const lock = k.solid(-28.9, 0, 10.9, -27.1, 2.75, 11.6, true);
+        const lockMesh = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.6, 0.1), worldMat({ color: '#c8a8d8' }));
+        lockMesh.position.set(-28, 1.45, 10.95);
+        k.group.add(lockMesh);
+        this.hack(s, {
+          kind: 'door', label: 'Gems & Co door', pos: new THREE.Vector3(-28, 1.5, 11), size: new THREE.Vector3(2, 2.8, 0.6), range: 25,
+          available: () => !s.state.unlocked,
+          act: () => { s.state.unlocked = true; lock.enabled = false; lockMesh.visible = false; g.audio.unlock(); g.peds.witnessCrime(new THREE.Vector3(-28, 0, 9), 'break-in', 1); return 'GEMS & CO UNLOCKED'; },
+        });
         const cases: [number, number][] = [[-31.5, 16.5], [-28, 16.5], [-24.5, 16.5], [-28, 20]];
         s.state.lasers = true;
         cases.forEach(([x, z], i) => {
@@ -340,12 +351,12 @@ export class Buildings {
         k.block(-13, 0.15, 40, -12, 1.4, 41.5, '#4a4c4e'); // stash safe
         k.props.cbox(-36, 0.16, 38, 3.5, 0.02, 2.5, { color: '#9b3b2f' }); // rug
         s.interactables.push(
-          { pos: new THREE.Vector3(-42.4, 0.15, 37.5), radius: 1.9, label: 'Wardrobe: change outfit', enabled: () => true, action: () => g.shop.cycleOutfit() },
+          { pos: new THREE.Vector3(-42.4, 0.15, 36.4), radius: 1.1, label: 'Wardrobe: change outfit', enabled: () => true, action: () => g.shop.cycleOutfit() },
           { pos: new THREE.Vector3(-13.6, 0.15, 32.2), radius: 1.9, label: 'Upgrade terminal', enabled: () => true, action: () => g.shop.buyUpgrade() },
           { pos: new THREE.Vector3(-13.6, 0.15, 39.0), radius: 1.9, label: 'Stash loot (safe from busts)', enabled: () => g.loot.carried.length > 0, action: () => g.loot.stashAll() },
           { pos: new THREE.Vector3(-40.4, 0.15, 32.2), radius: 1.9, label: 'Sleep: save game & cool off', enabled: () => true, action: () => g.shop.sleep() },
         );
-        this.hide(s, new THREE.Vector3(-42.4, 0.15, 37.5), 'Hide in wardrobe');
+        this.hide(s, new THREE.Vector3(-42.4, 0.15, 38.6), 'Hide in wardrobe');
       },
     });
   }
@@ -360,7 +371,7 @@ export class Buildings {
     for (let k = 0; k < 3; k++) { const zz = z0 - 0.4 - k * 0.8; this.ext.box(80, 0, zz - 0.8, 88, CURB_H + 0.15 * (3 - k), zz, { color: '#9a958b' }); }
     for (const x of [79, 89]) { this.ext.cbox(x, 4, z0 - 1.5, 0.15, 8, 0.15, { color: PAL.metal }); }
     this.ext.box(79.1, 6.6, z0 - 1.5, 80.4, 7.4, z0 - 1.45, { color: '#2f3b4d' });
-    for (let x = x0 + 2; x < x1 - 1; x += 4) { const k = new Kit(g.col); k.glow.box(x, 3.6, z0 - 0.06, x + 2.2, 4.6, z0 - 0.02, { color: '#b8c8d8' }); k.finish(g.scene); }
+    for (let x = x0 + 2; x < x1 - 1; x += 4) { const k = new Kit(g.col); k.glow.box(x, 3.6, z0 - 0.06, x + 2.2, 4.6, z0 - 0.02, { color: '#7c8a98' }); k.finish(g.scene); }
     this.site({
       id: 'police', name: 'Police station', open: true, x0: 69.5, z0: 13.5, x1: 98.5, z1: 32.5, ceiling: 4.2,
       door: { x: 84, z: 11.5, heading: Math.PI }, approach: { x: 84, z: 9, heading: 0 },
@@ -495,7 +506,7 @@ export class Buildings {
     lk.sign('P  PARKING', x0 - 0.2, 5.6, 84, -Math.PI / 2, 8, 1.5, '#2f3b4d', '#e8e2d0');
     lk.finish(g.scene);
     // entrance barrier (hackable)
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 6), new THREE.MeshLambertMaterial({ color: '#d8b020' }));
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 6), worldMat({ color: '#d8b020' }));
     bar.position.set(x0 + 0.5, 1.1, 84);
     g.scene.add(bar);
     const barCol = g.col.add(x0 + 0.3, 0, 81, x0 + 0.7, 1.2, 87, false, 'barrier');
@@ -533,8 +544,8 @@ export class Buildings {
     for (const [a, b] of [[x0 - 0.6, 25.8], [30.2, x1 + 0.6]]) g.col.add(a, 0, z0 - 0.6, b, 5.0, z0, true, 'building');
     this.sign('VANTAGE TOWER', 28, 4.3, z0 - 0.65, Math.PI, 9, '#1e2a36', '#9fe8ff');
     const glass = new Kit(g.col);
-    glass.glow.box(19, 0.6, z0 - 0.63, 25.6, 3.4, z0 - 0.61, { color: '#b8c8c0' });
-    glass.glow.box(30.4, 0.6, z0 - 0.63, 37, 3.4, z0 - 0.61, { color: '#b8c8c0' });
+    glass.glow.box(19, 0.6, z0 - 0.63, 25.6, 3.4, z0 - 0.61, { color: '#7c8a84' });
+    glass.glow.box(30.4, 0.6, z0 - 0.63, 37, 3.4, z0 - 0.61, { color: '#7c8a84' });
     glass.finish(g.scene);
     // helipad on the roof
     this.ext.box(22, top + 0.3, 21, 34, top + 0.34, 33, { color: '#4a4c4e' });
@@ -559,7 +570,7 @@ export class Buildings {
           gate.push(k.block(x, 0.15, 24.8, x + 1.6, 1.1, 25.2, '#5a5f64'));
         }
         const flaps = k.solid(26.6, 0.15, 24.8, 29.4, 1.1, 25.2, false);
-        const flapMesh = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.9, 0.1), new THREE.MeshLambertMaterial({ color: '#9fc4d0' }));
+        const flapMesh = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.9, 0.1), worldMat({ color: '#9fc4d0' }));
         flapMesh.position.set(28, 0.75, 25);
         k.group.add(flapMesh);
         this.hack(s, {
@@ -609,7 +620,7 @@ export class Buildings {
           for (const b of gate) b.enabled = true;
         };
         // lobby guard + server room guard
-        g.guards.addGuard([new THREE.Vector3(22, 0.15, 22), new THREE.Vector3(34, 0.15, 22)], s.id, () => this.siteAlarm(s, 'TOWER SECURITY ALERT', 1));
+        g.guards.addGuard([new THREE.Vector3(22, 0.15, 22), new THREE.Vector3(34, 0.15, 22)], s.id, () => { if (this.trespassing(s)) this.siteAlarm(s, 'TOWER SECURITY ALERT', 1); });
         g.guards.addGuard([new THREE.Vector3(18, SERVER_Y, 24.5), new THREE.Vector3(37.5, SERVER_Y, 24.5), new THREE.Vector3(37.5, SERVER_Y, 30.5), new THREE.Vector3(18, SERVER_Y, 30.5)], s.id, () => this.siteAlarm(s, 'SERVER ROOM BREACH', 2));
         this.cam(s, new THREE.Vector3(x0 + 1, SERVER_Y + 3.3, z1 - 1), Math.PI * 0.75, -0.5);
         this.cam(s, new THREE.Vector3(x1 - 1, 4.2, z0 + 1.2), -Math.PI * 0.25, -0.5);
@@ -718,7 +729,7 @@ export class Buildings {
   }
 
   private cam(s: Site, pos: THREE.Vector3, yaw: number, pitch: number) {
-    const c = this.g.cameras.addCam(pos, yaw, pitch, s.id, (cam) => this.siteAlarm(s, `CAMERA SPOTTED YOU — ${s.name.toUpperCase()}`, 1, cam));
+    const c = this.g.cameras.addCam(pos, yaw, pitch, s.id, (cam) => { if (this.trespassing(s)) this.siteAlarm(s, `CAMERA SPOTTED YOU — ${s.name.toUpperCase()}`, 1, cam); });
     s.cams.push(c);
     this.hack(s, {
       kind: 'camera', label: `${s.name} camera`, pos, size: new THREE.Vector3(0.7, 0.7, 0.9), range: 35, ref: c,
@@ -745,6 +756,13 @@ export class Buildings {
     s.hackables.push(h as Hackable);
   }
 
+  /** public areas are fine: only staff-only zones and upper floors count */
+  trespassing(s: Site) {
+    const P = this.g.player.pos, r = s.restricted;
+    if (P.y > 2) return true;
+    return !!r && P.x > r.x0 && P.x < r.x1 && P.z > r.z0 && P.z < r.z1;
+  }
+
   /** a building's alarm: heat + guards alerted (silenced panels suppress it) */
   siteAlarm(s: Site, msg: string, heat: number, _cam?: unknown) {
     const g = this.g;
@@ -753,7 +771,7 @@ export class Buildings {
     g.hud.toast(msg, 'heat');
     g.audio.alarmBell(15);
     g.post.triggerFlash('#ff2a1a', 0.25);
-    g.police.crime(Math.max(heat, g.police.heat), msg.toLowerCase());
+    g.police.crime(Math.max(heat, g.police.heat), '');
     g.news.report(s.id === 'jewel' ? 'store' : 'witness', g.player.pos.x, g.player.pos.z);
     g.guards.alertSite(s.id, g.player.pos);
   }

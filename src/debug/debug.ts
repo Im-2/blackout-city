@@ -29,6 +29,8 @@ export function updateDebug(g: Game) {
     g.police.minHeat = 1;
     g.hud.toast('DEBUG: LOOT IN HAND', 'dim');
   }
+  if (inp.pressed('KeyO')) { g.world.skipHours(3); g.hud.toast(`DEBUG: ${Math.floor(g.world.hour)}:00`, 'dim'); }
+  if (inp.pressed('KeyI')) g.world.toggleRain();
   if (inp.pressed('KeyB')) spawnBeside(g, 'bicycle');
   if (inp.pressed('KeyN')) spawnBeside(g, 'motorbike');
   if (inp.pressed('KeyV')) { spawnBeside(g, ALL_KINDS[cycleI % ALL_KINDS.length]); cycleI++; }

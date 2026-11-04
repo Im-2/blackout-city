@@ -85,7 +85,7 @@ export class Fx {
         case 'steam': {
           p.vx = R() * 0.3 + 0.4; p.vy = 1.2 + Math.random() * 0.8; p.vz = R() * 0.3 + 0.2;
           p.max = 1.6 + Math.random(); p.size = 0.3; p.grow = 1.1; p.g = 0.4; p.drag = 1.2;
-          const g = 0.62 + Math.random() * 0.12; this.c.setRGB(g, g, g * 1.02); break;
+          const g = 0.2 + Math.random() * 0.08; this.c.setRGB(g, g, g * 1.04); break;
         }
         case 'paint': {
           const sp = 3 * power;

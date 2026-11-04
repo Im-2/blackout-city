@@ -161,7 +161,7 @@ export class Bank {
     // tall lit windows in the front wall
     for (const x of [-92.3, -76.2]) {
       props.cbox(x, FLOOR_Y + 3.4, Z1 + 0.02, 3.2, 5.2, 0.1, { color: '#2b3530' });
-      glow.cbox(x, FLOOR_Y + 3.4, Z1 + 0.08, 2.8, 4.8, 0.04, { color: '#b99a5c' });
+      glow.cbox(x, FLOOR_Y + 3.4, Z1 + 0.08, 2.8, 4.8, 0.04, { color: '#8a7244' });
       props.cbox(x, FLOOR_Y + 3.4, Z1 + 0.1, 0.12, 4.8, 0.06, { color: '#2b3530' });
       props.cbox(x, FLOOR_Y + 3.0, Z1 + 0.1, 2.8, 0.12, 0.06, { color: '#2b3530' });
     }

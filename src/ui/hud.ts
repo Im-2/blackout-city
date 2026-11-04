@@ -19,8 +19,16 @@ const CONTROLS = `
   <div><b>Hold Q</b> or <b>Tab</b> hacker mode</div><div><b>LMB / E</b> hack · <b>RMB</b> all-red</div>
   <div><b>H</b> toggle HUD</div><div><b>F2</b> photo / clip mode</div>
   <div><b>M</b> mute</div><div><b>Esc</b> pause · <b>R</b> restart</div>
+  <div><b>Shift</b> in vehicle: boost</div><div><b>Hold E</b> pick a lock</div>
+  <div><b>J</b> phone · <b>Enter</b> take job</div><div><b>X</b> abandon job</div>
 </div>
-<div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> give loot · <code>?clip</code> URL = instant chase</div>`;
+<div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> give loot · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
+
+function p2stale(g: Game) {
+  const v = g.player.vehicle;
+  if (v) { const k = g.police.knownVehicle; return !!k && (k.id !== v.id || k.color !== v.color); }
+  return !!g.disguise.known && g.disguise.known !== g.disguise.current.id;
+}
 
 export class Hud {
   root: HTMLDivElement;
@@ -48,6 +56,13 @@ export class Hud {
   private mapBase: HTMLCanvasElement | null = null;
   private letterbox: HTMLDivElement;
   private radioEl: HTMLDivElement;
+  private moneyEl: HTMLDivElement;
+  private jobEl: HTMLDivElement;
+  private phoneEl: HTMLDivElement;
+  private escEl: HTMLDivElement;
+  private descEl: HTMLDivElement;
+  private vehEl: HTMLDivElement;
+  private lastHtml: Record<string, string> = {};
   private radioT = 0;
   private debugEl: HTMLDivElement;
   screens: Record<string, HTMLDivElement> = {};
@@ -66,13 +81,20 @@ export class Hud {
     this.objective = h('div', 'obj-main') as HTMLDivElement;
     this.objSub = h('div', 'obj-sub') as HTMLDivElement;
     obj.append(this.objective, this.objSub);
+    this.moneyEl = h('div', 'money') as HTMLDivElement;
+    this.jobEl = h('div', 'job') as HTMLDivElement;
+    obj.append(this.moneyEl, this.jobEl);
     this.hudLayer.appendChild(obj);
+    this.phoneEl = h('div', 'panel phone') as HTMLDivElement;
+    this.escEl = h('div', 'panel escapes') as HTMLDivElement;
+    this.hudLayer.append(this.phoneEl, this.escEl);
 
     const heat = h('div', 'panel heat');
     this.heatEl = h('div', 'stars') as HTMLDivElement;
     for (let i = 0; i < 5; i++) this.heatEl.appendChild(h('div', 'star'));
     this.statusEl = h('div', 'status') as HTMLDivElement;
-    heat.append(h('div', 'label', 'HEAT'), this.heatEl, this.statusEl);
+    this.descEl = h('div', 'desc') as HTMLDivElement;
+    heat.append(h('div', 'label', 'HEAT'), this.heatEl, this.statusEl, this.descEl);
     this.hudLayer.appendChild(heat);
 
     const en = h('div', 'panel energy');
@@ -94,7 +116,8 @@ export class Hud {
     const hp = h('div', 'bar hp');
     this.hpFill = h('div', 'fill') as HTMLDivElement;
     hp.appendChild(this.hpFill);
-    this.speedEl.append(this.speedNum, h('div', 'label', 'KM/H'), hp);
+    this.vehEl = h('div', 'label') as HTMLDivElement;
+    this.speedEl.append(this.speedNum, this.vehEl, hp);
     this.hudLayer.appendChild(this.speedEl);
 
     this.mini = document.createElement('canvas');
@@ -149,6 +172,7 @@ export class Hud {
   }
 
   toast(text: string, kind: 'hack' | 'heat' | 'cool' | 'dim' | 'win' = 'hack') {
+    for (const c of Array.from(this.toasts.children)) if (c.innerHTML === text && !c.classList.contains('out')) return; // no duplicate spam
     const t = h('div', `toast ${kind}`, text);
     this.toasts.appendChild(t);
     while (this.toasts.children.length > 3) this.toasts.firstChild!.remove();
@@ -230,21 +254,24 @@ export class Hud {
       const el = this.cdEls[k];
       (el.querySelector('i') as HTMLElement).style.height = `${cd * 100}%`;
       el.classList.toggle('afford', e >= HACK_INFO[k].cost);
+      el.style.display = cd > 0 ? 'block' : 'none';
     }
 
     // speed
     this.speedEl.style.display = v ? 'block' : 'none';
     if (v) {
       this.speedNum.textContent = String(Math.round(Math.abs(v.speed) * 3.6));
+      this.vehEl.textContent = `KM/H · ${v.label}`;
       this.hpFill.style.width = `${v.hp}%`;
       this.hpFill.classList.toggle('low', v.hp < 35);
     }
 
     // prompt
-    const label = g.hack.active ? '' : p.pick > 0 ? `PICKING LOCK ${'█'.repeat(Math.round(p.pick * 10))}${'░'.repeat(10 - Math.round(p.pick * 10))}` : p.focusLabel;
+    const label = g.hack.active ? '' : v && g.carAction ? g.carAction.label : p.pick > 0 ? `PICKING LOCK ${'█'.repeat(Math.round(p.pick * 10))}${'░'.repeat(10 - Math.round(p.pick * 10))}` : p.focusLabel;
     this.prompt.textContent = label ? `[E] ${label}` : v && v.speedAbs < 6 ? '' : '';
     this.prompt.style.display = label ? 'block' : 'none';
 
+    this.updateMissionPanels(g);
     this.radioT -= dt;
     if (this.radioT <= 0) this.radioEl.classList.remove('on');
     this.debugEl.style.display = g.debugOverlay ? 'block' : 'none';
@@ -282,8 +309,33 @@ export class Hud {
     this.drawMinimap(g);
   }
 
+  private set(el: HTMLElement, key: string, html: string) {
+    if (this.lastHtml[key] !== html) { el.innerHTML = html; this.lastHtml[key] = html; }
+    el.style.display = html ? 'block' : 'none';
+  }
+
+  /** cash, job tracker, fixer phone, escape options, police description */
+  private updateMissionPanels(g: Game) {
+    const carried = g.loot.carriedValue;
+    this.set(this.moneyEl, 'money', `$${g.loot.cash.toLocaleString()}${carried ? ` <span>· CARRYING $${carried.toLocaleString()}</span>` : ''}`);
+    const a = g.jobs.active;
+    this.set(this.jobEl, 'job', a ? `<b>JOB: ${a.title}</b> ${Math.ceil(a.t)}s · ${a.done.filter(Boolean).length}/${a.done.length} <i>[X] abandon</i>` : '<i>[J] PHONE: FIXER JOBS</i>');
+    if (g.jobs.phoneOpen) {
+      const rows = g.jobs.offers.map((o, i) => `<div class="${i === g.jobs.offer ? 'sel' : ''}">${i === g.jobs.offer ? '▶' : '&nbsp;'} ${o.title} <em>$${o.pay.toLocaleString()}</em></div>`).join('');
+      this.set(this.phoneEl, 'phone', `<div class="label">FIXER</div>${rows}<div class="brief">${g.jobs.offers[g.jobs.offer].brief}</div><div class="label">[J] NEXT · [ENTER] TAKE IT · [BACKSPACE] CLOSE</div>`);
+    } else this.set(this.phoneEl, 'phone', '');
+    const opts = g.police.heat > 0 ? g.escapes.options() : [];
+    this.set(this.escEl, 'esc', opts.length ? `<div class="label">ESCAPE OPTIONS</div>${opts.map((o) => `<div>${o.label} <em>${Math.round(o.d / 5) * 5}m</em></div>`).join('')}` : '');
+    let desc = '';
+    if (g.police.heat > 0) {
+      const stale = p2stale(g);
+      desc = stale ? `<span class="stale">DESCRIPTION OUT OF DATE</span>` : `SEEKING: ${g.news.description()}`;
+    }
+    this.set(this.descEl, 'desc', desc);
+  }
+
   private updateMarker(g: Game) {
-    const tgt = g.heist.target;
+    const tgt = g.missionTarget();
     const P = g.player.worldPos;
     const d = Math.hypot(tgt.x - P.x, tgt.z - P.z);
     const m = this.marker;
@@ -398,7 +450,7 @@ export class Hud {
       c.stroke();
     }
     // objective
-    const t = g.heist.target;
+    const t = g.missionTarget();
     c.fillStyle = '#ffd24a';
     c.save();
     c.translate((t.x - P.x) * S, (t.z - P.z) * S);
