@@ -2,7 +2,7 @@
 // or stash at the safehouse. Cash buys hack upgrades, car tuning, outfits,
 // and resprays.
 import type { Game } from './game';
-import type { LootItem } from './save';
+import type { LootItem } from '../save/save';
 import { OUTFITS } from '../player/disguise';
 import type { Vehicle } from '../vehicles/vehicle';
 import { PAL } from './palette';

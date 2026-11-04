@@ -25,9 +25,14 @@ export function updateDebug(g: Game) {
   if (inp.pressed('KeyU')) { const c = blockCenter(6, 6); teleport(g, c.x - 30, c.z - 2, 0, 'MID-CITY'); }
   if (inp.pressed('KeyG')) { g.spawnGetawayBeside(); g.hud.toast('DEBUG: GETAWAY CAR', 'dim'); }
   if (inp.pressed('KeyL') && !g.heist.hasLoot) {
-    g.heist.reset(true);
-    g.police.minHeat = 1;
+    g.reset(false);
+    g.missions.startAt('bank_heist', 'escape');
     g.hud.toast('DEBUG: LOOT IN HAND', 'dim');
+  }
+  if (inp.pressed('Backquote')) {
+    g.save.data.unlockAll = !g.save.data.unlockAll;
+    g.save.write();
+    g.hud.toast(g.save.data.unlockAll ? 'DEBUG: ALL MISSIONS UNLOCKED' : 'DEBUG: UNLOCKS NORMAL', 'dim');
   }
   if (inp.pressed('KeyO')) { g.world.skipHours(3); g.hud.toast(`DEBUG: ${Math.floor(g.world.hour)}:00`, 'dim'); }
   if (inp.pressed('KeyI')) g.world.toggleRain();

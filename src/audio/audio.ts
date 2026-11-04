@@ -177,6 +177,9 @@ export class Audio {
   cash() { this.tone('square', 1568, 1568, 0.06, 0.07); this.tone('square', 2093, 2093, 0.12, 0.07, 0.07); this.noise(0.08, 0.1, 5000, 'highpass', 0.02); }
   spray() { this.noise(0.9, 0.18, 3200, 'highpass'); }
   train(pos?: THREE.Vector3) { const a = this.att(pos, 90); if (a < 0.05) return; this.noise(2.5, 0.35 * a, 220); this.tone('sawtooth', 70, 50, 2.5, 0.12 * a); }
+  missionStart() { [0, 7, 12].forEach((s, i) => this.tone('square', 330 * Math.pow(2, s / 12), 330 * Math.pow(2, s / 12), 0.16, 0.08, i * 0.11)); }
+  checkpoint() { this.tone('square', 880, 880, 0.07, 0.08); this.tone('square', 1320, 1320, 0.12, 0.08, 0.07); }
+  fail() { [7, 3, 0, -5].forEach((s, i) => this.tone('sawtooth', 196 * Math.pow(2, s / 12), 196 * Math.pow(2, s / 12), 0.28, 0.09, i * 0.17)); }
   loot() { [0, 4, 7, 12].forEach((s, i) => this.tone('square', 523 * Math.pow(2, s / 12), 523 * Math.pow(2, s / 12), 0.12, 0.08, i * 0.06)); }
   heatUp() { this.tone('sawtooth', 200, 260, 0.25, 0.08); this.tone('sawtooth', 260, 330, 0.25, 0.08, 0.15); }
   win() { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => this.tone('square', 392 * Math.pow(2, s / 12), 392 * Math.pow(2, s / 12), 0.25, 0.08, i * 0.09)); }

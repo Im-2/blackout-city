@@ -44,6 +44,7 @@ export class Jobs {
   /** J opens the phone; J again cycles; Enter accepts; X abandons */
   input() {
     const inp = this.g.input;
+    if (this.g.missions.run || this.g.missions.card) return;
     if (inp.pressed('KeyJ')) {
       if (!this.phoneOpen) { this.phoneOpen = true; this.g.audio.ring(); }
       else this.offer = (this.offer + 1) % DEFS.length;

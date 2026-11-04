@@ -178,3 +178,23 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
 .taxi { top: 190px; left: 50%; transform: translateX(-50%); }
 .district-banner { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); font-size: 40px; letter-spacing: 8px; color: #e8e2d0; text-shadow: 3px 3px 0 #000; opacity: 0; transition: opacity 0.6s; white-space: nowrap; }
 .district-banner.on { opacity: 1; }
+
+.m-timer { font-size: 22px; color: var(--ink); margin-top: 3px; }
+.m-timer b { font-weight: normal; color: #fff1d0; font-size: 30px; margin-right: 8px; }
+.m-timer b.low { color: #ff5a4a; animation: blink 0.5s steps(2) infinite; }
+.m-timer span { color: #ffd24a; }
+.mission-card { left: 50%; top: 30%; transform: translateX(-50%); width: min(460px, 86vw); padding: 12px 18px; border-left: 6px solid var(--amber); }
+.mission-card .c-title { font-size: 44px; line-height: 1; color: #fff1d0; margin: 4px 0 0; }
+.mission-card .c-giver { font-size: 18px; color: var(--dim); margin-bottom: 8px; }
+.mission-card .c-intro { font-size: 20px; line-height: 1.1; text-transform: none; margin-bottom: 10px; }
+.fullmap { position: absolute; inset: 0; pointer-events: auto; background: #16303c; cursor: crosshair; }
+.fullmap canvas { position: absolute; inset: 0; image-rendering: pixelated; }
+.map-tip { position: absolute; left: 0; top: 0; max-width: 320px; padding: 6px 10px; background: var(--panel); border: 2px solid var(--line); font-size: 18px; line-height: 1.05; text-transform: none; pointer-events: none; display: none; }
+.map-tip b { color: #fff1d0; font-weight: normal; }
+.map-legend { left: 18px; top: 18px; padding: 8px 12px; font-size: 19px; max-width: 260px; pointer-events: none; }
+.map-legend .row { display: flex; align-items: center; gap: 6px; }
+.map-legend .row i { width: 12px; height: 12px; display: inline-block; }
+.map-legend .row em { font-style: normal; color: var(--dim); font-size: 15px; }
+.map-legend .types { font-size: 15px; line-height: 1.1; }
+.map-help { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 18px; color: #e8e2d0; text-shadow: 2px 2px 0 #000; white-space: nowrap; pointer-events: none; }
+.screen .btn { flex: none; }

@@ -105,6 +105,13 @@ export class Player {
     const g = this.g;
     const inp = g.input;
     if (g.travel.open) { this.view.update(dt, 'idle', 0); return; }
+    if (g.missions.card) {
+      // hold still for the intro card
+      const v = this.vehicle;
+      if (v) { v.throttle = 0; v.steer = 0; v.handbrake = true; }
+      this.view.update(dt, v ? (v.two ? 'ride' : 'drive') : 'idle', 0);
+      return;
+    }
     if (this.hidden) {
       if (inp.pressed('KeyE') || inp.pressed('Space')) { this.hidden = false; this.view.root.visible = true; }
       return;

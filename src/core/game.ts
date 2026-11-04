@@ -21,14 +21,14 @@ import { Pedestrians } from '../ai/pedestrians';
 import { Guards } from '../ai/guards';
 import { SecurityCameras, SecCam } from '../ai/cameras';
 import { HackSystem } from '../hacking/hack';
-import { Heist, Outcome } from '../heist/heist';
+import { Heist } from '../heist/heist';
 import { Hud } from '../ui/hud';
 import { Audio } from '../audio/audio';
 import { updateDebug } from '../debug/debug';
 import { loadCharacterModels } from '../characters/loader';
 import { blockCenter } from '../world/layout';
 import { Quality } from './quality';
-import { Save } from './save';
+import { Save } from '../save/save';
 import { StreetLife } from '../world/streetlife';
 import { Ambient } from '../render/ambient';
 import { News } from '../ui/news';
@@ -40,8 +40,14 @@ import { WorldTime } from '../render/world';
 import { Escapes } from '../ai/escapes';
 import { Chunks } from '../map/chunks';
 import { FastTravel } from '../map/fasttravel';
+import { Gps } from '../map/gps';
+import { Missions } from '../missions/missions';
+import { FullMap } from '../ui/fullmap';
 
-export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results';
+export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results' | 'map';
+
+/** new games and reloads begin at the safehouse door */
+const HOME = { x: -24, z: 48.6, heading: 0 };
 
 // rAF doesn't fire in background tabs; fall back to a timeout so loading never stalls.
 const nextFrame = () => new Promise<void>((r) => { requestAnimationFrame(() => r()); setTimeout(r, 50); });
@@ -85,6 +91,9 @@ export class Game {
   escapes!: Escapes;
   chunks!: Chunks;
   travel!: FastTravel;
+  gps!: Gps;
+  missions!: Missions;
+  map!: FullMap;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
   private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean } | null = null;
@@ -105,7 +114,6 @@ export class Game {
   private pv = new THREE.Matrix4();
   private impacts: ImpactEvent[] = [];
   private bustT = -1;
-  private resultT = -1;
   private wasLocked = false;
   private rng = new Rng(555);
   clipMode = new URLSearchParams(location.search).has('clip');
@@ -179,6 +187,9 @@ export class Game {
     this.buildings = new Buildings(this).build();
     this.escapes = new Escapes(this).build();
     this.travel = new FastTravel(this).build();
+    this.gps = new Gps(this);
+    this.missions = new Missions(this);
+    this.map = new FullMap(this);
     this.hack.build();
     this.heist = new Heist(this);
     this.news = new News(this);
@@ -199,11 +210,45 @@ export class Game {
   private bindUi() {
     const S = this.hud.screens;
     S.title.querySelector('.start')!.addEventListener('click', () => this.startPlaying());
+    const start = S.title.querySelector('.start') as HTMLElement, fresh = S.title.querySelector('.newgame') as HTMLElement;
+    start.textContent = this.save.hasProgress ? 'CONTINUE' : 'NEW GAME';
+    fresh.style.display = this.save.hasProgress ? '' : 'none';
+    this.confirmButton(fresh, () => { this.newGame(); });
+    this.confirmButton(S.pause.querySelector('.newgame') as HTMLElement, () => this.newGame());
     S.pause.querySelector('.resume')!.addEventListener('click', () => this.resume());
-    S.pause.querySelector('.restart')!.addEventListener('click', () => { this.reset(false); this.resume(); });
+    S.pause.querySelector('.restart')!.addEventListener('click', () => { if (this.missions.run) this.missions.retry(false); else this.hud.toast('NO MISSION RUNNING', 'dim'); });
+    S.pause.querySelector('.quitm')!.addEventListener('click', () => { if (this.missions.run) this.missions.quit(); else this.hud.toast('NO MISSION RUNNING', 'dim'); });
+    S.pause.querySelector('.map')!.addEventListener('click', () => this.map.show('paused'));
     S.pause.querySelector('.mute')!.addEventListener('click', () => this.hud.toast(this.audio.toggleMute() ? 'MUTED' : 'SOUND ON', 'dim'));
     S.pause.querySelector('.forget')!.addEventListener('click', () => { this.routes.clear(); this.hud.toast('ROUTE MEMORY CLEARED', 'dim'); });
-    S.results.addEventListener('click', (e) => { if ((e.target as HTMLElement).classList.contains('restart')) this.restart(); });
+    S.results.addEventListener('click', (e) => {
+      const act = (e.target as HTMLElement).dataset.act;
+      if (act) this.missions.action(act);
+    });
+  }
+
+  /** destructive buttons ask twice */
+  private confirmButton(el: HTMLElement, fn: () => void) {
+    const label = el.textContent ?? '';
+    let armed = 0;
+    el.addEventListener('click', () => {
+      if (performance.now() - armed < 4000) { el.textContent = label; armed = 0; fn(); return; }
+      armed = performance.now();
+      el.textContent = 'ERASE SAVE? CLICK AGAIN';
+      setTimeout(() => { el.textContent = label; }, 4000);
+    });
+  }
+
+  /** wipes progress and starts over at the safehouse */
+  newGame() {
+    this.save.wipe();
+    this.routes.clear();
+    this.gps.clearWaypoint();
+    (this.hud.screens.title.querySelector('.start') as HTMLElement).textContent = 'NEW GAME';
+    this.reset(false);
+    this.play();
+    this.hud.toast('NEW GAME', 'hack');
+    this.hud.hint('Press M for the map. Walk or drive into a marker to start a mission.');
   }
 
   private startPlaying() {
@@ -211,7 +256,10 @@ export class Game {
     this.hud.show(null);
     this.state = 'playing';
     this.input.lock();
-    if (!this.clipMode) this.hud.toast('CUT THE POWER. ROB THE CITY.', 'hack');
+    if (!this.clipMode) {
+      this.hud.toast('CUT THE POWER. ROB THE CITY.', 'hack');
+      this.hud.hint('Press M for the map. Walk or drive into a marker to start a mission.');
+    }
   }
 
   pause() {
@@ -221,16 +269,14 @@ export class Game {
   }
 
   resume() {
+    this.play();
+  }
+
+  /** back into the game from any screen */
+  play() {
     this.state = 'playing';
     this.hud.show(null);
     this.audio.init();
-    this.input.lock();
-  }
-
-  restart() {
-    this.reset(false);
-    this.hud.show(null);
-    this.state = 'playing';
     this.input.lock();
   }
 
@@ -244,18 +290,18 @@ export class Game {
 
   // ------------------------------------------------------------------ world state
   reset(clip: boolean) {
+    this.missions.onWorldReset();
     for (const v of [...this.vehicles]) this.removeVehicle(v);
     this.vehicles = [];
     this.parked = [];
     this.getawayCar = null;
     this.bustT = -1;
-    this.resultT = -1;
     this.hitstopT = 0;
     this.timeScale = 1;
     this.routes.newRun();
     this.signals.reset();
     this.hack.reset();
-    this.heist.reset(clip);
+    this.heist.reset();
     this.police.reset();
     this.cameras.reset();
     this.post.damage = 0;
@@ -269,9 +315,8 @@ export class Game {
     this.addVehicle(ga);
     this.getawayCar = ga;
 
-    const st = this.bank.playerStart;
-    this.player.spawn(st.x, st.z, st.heading);
-    this.camRig.snapBehind(st.heading);
+    this.player.spawn(HOME.x, HOME.z, HOME.heading);
+    this.camRig.snapBehind(HOME.heading);
     this.camRig.pitch = -0.12;
     this.chunks.reset();
     this.traffic.reset();
@@ -308,15 +353,13 @@ export class Game {
 
     if (clip) {
       // instant chase: mid-city, next to the getaway car, heat 3
+      this.missions.startAt('bank_heist', 'escape');
       const c = blockCenter(6, 6);
       ga.place(c.x - 30, c.z + 4, 0);
       this.player.spawn(c.x - 32.9, c.z + 4, 0);
       this.camRig.snapBehind(0);
-      this.police.minHeat = 1;
       this.police.setHeat(3, 'clip mode');
       this.chunks.update();
-    const LP = this.player.worldPos;
-    for (const v of this.vehicles) { const d = Math.abs(v.pos.x - LP.x) + Math.abs(v.pos.z - LP.z); v.setLod(d < 35 ? 0 : d < 110 ? 1 : 2); }
     }
   }
 
@@ -376,9 +419,10 @@ export class Game {
     return y + s.ceiling;
   }
 
-  /** where the HUD marker points: the heist escape outranks a side job */
-  missionTarget(): THREE.Vector3 {
-    return (!this.heist.hasLoot && this.jobs.target()) || this.heist.target;
+  /** where the HUD marker and GPS point: mission, then side job, then waypoint */
+  missionTarget(): THREE.Vector3 | null {
+    if (this.missions.run) return this.missions.target();
+    return this.jobs.target() ?? this.gps.waypoint;
   }
 
   /** cut-to-black teleport (elevators, subway, sewers) */
@@ -424,7 +468,7 @@ export class Game {
   }
 
   onBusted() {
-    if (this.player.busted || this.heist.outcome) return;
+    if (this.player.busted || this.missions.ended) return;
     this.player.busted = true;
     this.player.exitVehicle(true);
     this.player.busted = true;
@@ -435,14 +479,13 @@ export class Game {
     this.bustT = 0;
   }
 
-  onOutcome(o: Outcome) {
-    if (o === 'won') {
-      this.loot.addCash(this.heist.stats.loot);
-      this.audio.win();
-      this.hud.toast('CLEAN GETAWAY', 'win');
-      this.police.setHeat(0);
-    }
-    this.resultT = 0;
+  /** free-roam bust: a fine and a walk out of the station, no game over */
+  private freeRoamBusted() {
+    const fine = Math.min(this.save.data.cash, 250);
+    this.save.data.cash -= fine;
+    this.save.write();
+    this.police.reset();
+    this.fadeTeleport(84, 0.15, 8, 0, fine ? `RELEASED — $${fine} FINE` : 'RELEASED WITH A WARNING');
   }
 
   // ------------------------------------------------------------------ loop
@@ -459,12 +502,14 @@ export class Game {
     // global keys
     if (inp.pressed('KeyH')) this.hud.setVisible(!this.hud.visible);
     if (inp.pressed('F2')) this.hud.setPhoto(!this.hud.photo);
-    if (inp.pressed('KeyM')) this.hud.toast(this.audio.toggleMute() ? 'MUTED' : 'SOUND ON', 'dim');
+    if (inp.pressed('KeyZ')) this.hud.toast(this.audio.toggleMute() ? 'MUTED' : 'SOUND ON', 'dim');
     if (inp.pressed('F3')) this.debugOverlay = !this.debugOverlay;
     if (inp.pressed('F4')) this.quality.cycle();
-    if (inp.pressed('KeyR') && (this.state === 'results' || this.state === 'playing' || this.state === 'paused')) this.restart();
+    if (inp.pressed('KeyR') && (this.state === 'playing' || this.state === 'paused') && this.missions.run && !this.missions.ended) this.missions.retry(false);
     if (inp.pressed('Escape') && this.state === 'paused') this.resume();
     else if (inp.pressed('KeyP') && this.state === 'playing') { this.input.unlock(); this.pause(); }
+    if (this.state === 'map') this.map.update(realDt);
+    else if (inp.pressed('KeyM') && (this.state === 'playing' || this.state === 'paused')) this.map.show(this.state);
 
     if (this.hud.root.dataset.state !== this.state) this.hud.root.dataset.state = this.state;
     if (this.state === 'playing') this.update(realDt);
@@ -482,6 +527,7 @@ export class Game {
       this.peds.update(realDt);
       this.env.follow(new THREE.Vector3(-84, 0, -20), this.time);
     } else if (this.state === 'results') {
+      this.missions.updateResults();
       // slow orbit around the scene of the crime
       this.time += realDt * 0.3;
       const P = this.player.worldPos;
@@ -532,6 +578,8 @@ export class Game {
     this.ambient.update(dt);
     this.street.update(dt);
     this.chunks.update();
+    const LP = this.player.worldPos;
+    for (const v of this.vehicles) { const d = Math.abs(v.pos.x - LP.x) + Math.abs(v.pos.z - LP.z); v.setLod(d < 35 ? 0 : d < 110 ? 1 : 2); }
     this.city.flushInstances();
     this.travel.update();
     this.buildings.update(dt);
@@ -542,6 +590,8 @@ export class Game {
     this.news.update(realDt);
     this.hack.update(realDt, dt);
     this.heist.update(dt);
+    this.missions.update(dt);
+    this.gps.update(realDt);
     this.bank.update(dt, this.time, this.heist.alarm);
 
     const pv = this.player.vehicle;
@@ -559,15 +609,10 @@ export class Game {
     // busted sequence
     if (this.bustT >= 0) {
       this.bustT += realDt;
-      if (this.bustT > 2.2) { this.bustT = -1; this.heist.finish('busted'); }
-    }
-    if (this.resultT >= 0) {
-      this.resultT += realDt;
-      if (this.resultT > 1.6) {
-        this.resultT = -1;
-        this.state = 'results';
-        this.hud.results(this);
-        this.input.unlock();
+      if (this.bustT > 2.2) {
+        this.bustT = -1;
+        if (this.missions.run) this.missions.fail('Busted');
+        else this.freeRoamBusted();
       }
     }
 

@@ -28,7 +28,7 @@ tight, great-feeling, good-looking slice beats a big empty map.
 - Road graph: 13×13 intersections (one skipped by the overpass), `RoadGraph` (Dijkstra paths, street names). The perimeter is `RING`, the highway.
 - The Bank: block (4,5), front faces Union Blvd (z = 0). Interior floor y = 0.95.
 - Drop point: Old Garage in block (8,8), roll-up door facing west.
-- Player start: the bank's front sidewalk on Union Blvd (-75, -8.6).
+- Player start: the safehouse door (-24, 48.6), `HOME` in `core/game.ts`, in free roam.
 
 ## File map
 ```
@@ -41,7 +41,6 @@ src/
     input.ts              keyboard/mouse, pointer lock, per-frame edges
     game.ts               Game: owns every system, update order, state machine
     quality.ts            quality presets + automatic downgrade
-    save.ts               persistent cash/stash/outfits/upgrades/escape counts
     economy.ts            Loot (carried, fence, stash) + Shop (upgrades, outfits, respray)
   assets/textures.ts      procedural pixel textures (facades, asphalt, sidewalk…)
   render/
@@ -83,13 +82,20 @@ src/
     cameras.ts            security cameras (street, bank, per-building)
     escapes.ts            metro, sewers, hiding, billboards, drones, bollards, adaptive posts
   hacking/hack.ts         hacker mode, hackables, effects
-  heist/heist.ts          objectives, alarm, win/fail, stats
+  heist/heist.ts          bank rules: doors, alarm, loot, drop (active only during the mission)
   heist/jobs.ts           fixer phone: ATM, courier, data, armored truck, evidence
+  missions/
+    types.ts              MissionDef, MissionStep, type colours + tags
+    data.ts               the mission list
+    missions.ts           runner: markers, intro card, steps, checkpoints, end screens, rewards
+  save/save.ts            localStorage save: cash, stash, outfits, upgrades, escapes, missions, rep, vehicles
   map/
     districts.ts          the 6 districts: tint, styles, traffic + crowd mix, block table
     chunks.ts             world streaming around the player, parked cars
     fasttravel.ts         taxi stands + menu
-  ui/hud.ts               HUD, minimap, toasts, screens, phone, escape list
+    gps.ts                waypoint, road-graph route, chevrons on the road
+  ui/hud.ts               HUD, minimap, toasts, screens, phone, escape list, mission card + end screens
+  ui/fullmap.ts           full map (M): pan, zoom, markers, places, police, waypoint
   ui/news.ts              radio lines + billboard ticker
   audio/audio.ts          WebAudio synth (engine, siren, hacks, ambience)
   debug/debug.ts          clip/debug keys, ?clip mode
@@ -110,14 +116,14 @@ assets/                   reference art (not shipped) + optional models/
 - **Phase 1 crowd (`ai/pedestrians.ts`):** 90–230 agents on a sidewalk graph (block corners + crosswalk edges that wait for the signal). LOD: nearest N agents (quality.rigs) within 52 m get a pooled `RigCharacter`; the rest are 4 `InstancedMesh` "ghost" draw calls; agents >195 m run a cheap path-only update. Roles: walkers (office/jogger/courier/teen/tourist/construction/dogwalker/local), vendors at carts, queues at carts/ATMs, buskers, bench sitters/homeless, chat groups, tower security. Types come from `characters/pedTypes.ts` (recoloured/re-propped reference sheets; rig supports briefcase/parcel/phone/camera/hardhat/guitar/backpack/apron + hi-vis). Walkers duck into street doors and re-emerge elsewhere.
 - **Witnesses:** crimes call `peds.witnessCrime(pos)`; up to 2 peds with LOS start a 5.5 s 911 call (red ☎ icon + progress). Cancelled by getting within 3.2 m (they put hands up and flee), breaking LOS for 2.2 s, a blackout, or a jammed cell tower (hackable `cell`, 150 m, 30 s). A completed call = heat +1 and a radio/news line.
 - **Ambient (`render/ambient.ts`):** pigeon flocks that scatter from people/cars, steam vents, tumbling newspapers, instanced litter. Street furniture in `world/streetlife.ts` (food/coffee carts, ATMs, bus stops, cell towers, vents).
-- **News/radio (`ui/news.ts`)** describes the player by current outfit or car colour ("suspect in a green tie"). `player/disguise.ts` + `core/save.ts` added as groundwork for later phases.
+- **News/radio (`ui/news.ts`)** describes the player by current outfit or car colour ("suspect in a green tie"). `player/disguise.ts` + the save module added as groundwork for later phases.
 - **Phase 2 vehicles:** 20 kinds in `vehicles/carMesh.ts` (bicycle, scooter, motorbike, police bike, sedan, hatchback, taxi, sports, muscle, pickup, SUV, delivery van, food truck, box truck, garbage truck, bus, ambulance, fire truck, cruiser, SWAT) with per-kind tuning in `PARAMS` (vehicle.ts). Two-wheelers: lean, Shift = boost (+wheelie on motorbikes), 0.42 m hitbox, rider visible in a `ride` pose (pedals on bicycles), thrown off on impacts > 8.5 m/s. Collision circles scale with vehicle length. Building gaps inside blocks are 1.5 m: bikes fit, cars don't.
 - **Traffic (`ai/traffic.ts`):** density from quality (12–32), district spawn weights (downtown / industrial / residential, `SPAWN_WEIGHTS`), lane changes when blocked, honking in jams, panic swerve from a player car closing fast head-on, pulling over for sirens, ambulance/fire-truck runs every 35–60 s, 2 city buses on fixed loops that stop at bus stops. Parked vehicles use the same district weights.
 - **Stealing:** parked vehicles are locked — hold E for 1.4 s to pick the lock (witnesses may call; 25 % car alarm), or hack the vehicle (LMB = unlock quietly, RMB = alarm decoy). Traffic is carjacked instantly. Police bikes join at heat 2+.
 - Clip keys: B bicycle, N motorbike, V cycles every vehicle kind, K crowd burst, [ / ] teleport between sites.
 - **Phase 3 buildings (`world/buildings.ts`, kit in `world/interior.ts`):** reserved blocks stay empty in `city.ts` (`Buildings.reserve` runs before `city.build`). Exteriors always exist; interiors stream in < 60 m, out > 110 m (meshes, colliders, surfaces, hackables, guards and cams all released; per-site state resets on stream-in). Playable: Mart 24 (rob or skim register; clerk calls 911 unless you stay within 3.5 m), Gems & Co (hack door, lasers, 4 cases, safe, alarm panel), Pawn & Loan (fence, clothes), safehouse (wardrobe, stash, upgrades, sleep/save), police station (records hack: heat -2, forgets routes), parking garage (3 levels, ramps, respray $200, cars to swap, hackable barrier), Vantage Tower (turnstiles, elevator, server room, roof helipad, ziplines). Warehouse and Lucky 7 Arcade are closed stubs. Public areas are safe: `Buildings.trespassing` limits alarms to `restricted` zones and upper floors. Multi-level ground goes through `surfaces`/`surfaceHeight` in `layout.ts`. Hand-placed + 10 generated fire escapes; 4 ziplines. `g.carAction` = context action for E while driving.
 - **Phase 4 escapes (`ai/escapes.ts`):** three metro stations under the street (y = -8), hack or vault turnstiles, trains every 30 s, riding drops the trail at the origin station. **Default: the metro is underground and fade-cut, so trains are not visible crossing the map.** Six paired sewer manholes. Hide in dumpsters, parked vans/box trucks, the wardrobe. Decoys: car alarms, billboards, drones. No waterfront, so **bollards replace the drawbridge** (3 hackable rows, 2.24 m spacing: bikes pass, cars don't). **Green wave:** LMB on a signal while driving > 2 m/s turns it and the next two green for you and red for cross traffic; each flips to a cop-obeyed red once you pass (on foot LMB = all green chaos; RMB = all red). Disguises and respray make the description stale: recognition drops to 8–10 m. Adaptive: after 2+ uses of an escape (`save.data.escapes`) police post officers at metro/sewer, fly the helicopter from heat 3 for rooftops, and search dumpsters, with a HUD hint.
-- **Phase 5:** cash in `core/save.ts`/`economy.ts` (fence pays 80 %, 60 % while hot; busted = carried loot confiscated; stash is safe). Upgrades: longer blackouts, cheaper hacks, faster recharge, tuned getaway car. Jobs on J/Enter/X. `render/world.ts`: 8 real minutes per in-game day, rain lowers grip 18 %, rush hour +30 % traffic, a street market closes one Mill St block (`REdge.closed`). Clip keys O = +3 hours, I = rain.
+- **Phase 5:** cash in `save/save.ts`/`economy.ts` (fence pays 80 %, 60 % while hot; busted = carried loot confiscated; stash is safe). Upgrades: longer blackouts, cheaper hacks, faster recharge, tuned getaway car. Jobs on J/Enter/X. `render/world.ts`: 8 real minutes per in-game day, rain lowers grip 18 %, rush hour +30 % traffic, a street market closes one Mill St block (`REdge.closed`). Clip keys O = +3 hours, I = rain.
 - **Perf (stress: heat 5, rain, near 4 buildings, Intel Iris Xe, 1920×1080 CSS at 150 % scaling, forced GPU sync):** LOW ≈ 15 ms, MEDIUM ≈ 19 ms, HIGH ≈ 19 ms, ULTRA ≈ 26 ms. Fixes that got there: 8-bit sRGB render target instead of half-float, PCF instead of PCF-soft shadows, 30 Hz shadow refresh on LOW/MEDIUM, MSAA per preset. Game starts on HIGH and auto steps down.
 - Python edits on Windows: use `open(..., encoding='utf-8', newline='')` — default cp1252/CRLF corrupts sources.
 
@@ -133,6 +139,12 @@ assets/                   reference art (not shipped) + optional models/
 - **Clip:** `[` `]` now also teleports to each district's stand. Saved route memory from the old map is discarded (edge count changed).
 - **Perf (stress: heat 5, chase, Intel Iris Xe, 1920×1080 CSS at 150 % scaling, forced GPU sync):** LOW ≈ 15 ms (178 draws), MEDIUM ≈ 16 ms (135), HIGH ≈ 25 ms (240). `npm run build` ≈ 270 KB gz.
 - Minimap redraws at 15 Hz from a sub-rect of the map canvas; it was 4.7 ms per frame before.
+- **Phase B, missions:** the game now starts in free roam at the safehouse. A mission is a `MissionDef` in `missions/data.ts`: id, title, giver, district, type, marker, `unlock`, `steps`, `timeLimit`, `failIf`, `failOnWreck`, `setup`/`cleanup`/`summary`, `reward`, `replay`. Nothing else needs touching to add one. A step has `text`/`sub` (string or function), `target` (drives beam, arrow, GPS, distance), `reach` and/or `done`, `enter`, and an optional `checkpoint.restore` that rebuilds the world when retrying from it. Samples: `courier_run` "Hot Parcel" and `bank_heist` "Cut the Power".
+- **Mission flow:** walk (2.8 m) or drive (5.5 m) into a marker for the intro card: the player freezes, a car brakes, E/Enter starts, Backspace/X declines. Fail screen: Enter/C = checkpoint, R = mission, X/Backspace = quit. Success: Enter/E/Space continues free roam where you stand. End screens come up 1.4 s after the result. `GameState` gained `map`; `g.play()` returns to gameplay. `g.missionTarget()` priority: mission, then job, then waypoint.
+- **Mission defaults (revisit if needed):** heat alone never fails a mission, only a bust does. Missions don't track a specific vehicle, so swapping or leaving one can't break them. Markers refuse to start while heat > 0, with a hint, so a chase never dumps into a card. The bank heist is locked behind Hot Parcel to demonstrate locks: delete `unlock` in `data.ts` to open it. Retrying from a checkpoint keeps the time on the clock and counts elapsed time toward best time. Bank doors are hackable and the loot grabbable only while `heist.active`.
+- **Free-roam bust:** fine up to $250, heat cleared, released outside the police station at (84, 8). A bust during a mission opens the fail screen instead.
+- **Keys:** M = full map (click = waypoint, right-click clears, drag = pan, wheel = zoom). Mute moved from M to Z. R retries only while a mission is running. Clip: backtick = unlock all missions, L = reset to the heist's escape step. `?clip` starts at that step too.
+- **Save:** `blackoutcity.save.v1` holds completed missions (count, best time), reputation (overall + per district), owned vehicles and `unlockAll` on top of the older fields. The title shows CONTINUE + NEW GAME when progress exists. New Game on the title and pause screens asks for a second click, then wipes the save.
 
 ## Testing notes
 - Plain screenshots of the preview pane can return a stale image; `zoom` over the full region captures a fresh frame.

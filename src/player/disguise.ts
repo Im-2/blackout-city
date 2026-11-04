@@ -27,6 +27,7 @@ export class Disguise {
   constructor(private g: Game) {}
 
   reset() {
+    this.owned = new Set(['clerk', 'hoodie']);
     this.current = OUTFITS.find((o) => o.id === this.g.save.data.outfit) ?? OUTFITS[0];
     for (const id of this.g.save.data.outfits) this.owned.add(id);
     this.known = null;

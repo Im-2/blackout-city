@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { HACK_INFO, HackKind } from '../hacking/hack';
 import { BLOCKS, HALF, PITCH, ROAD_HALF, SHORE, blockBounds, BANK_BLOCK, DROP_BLOCK } from '../world/layout';
 import { DISTRICTS, districtOfBlock } from '../map/districts';
+import { TYPE_INFO, MissionDef } from '../missions/types';
+import type { Missions } from '../missions/missions';
 import type { Game } from '../core/game';
 
 const h = (tag: string, cls = '', html = '') => {
@@ -19,12 +21,13 @@ const CONTROLS = `
   <div><b>E</b> interact · enter / exit car</div><div><b>C</b> car camera</div>
   <div><b>Hold Q</b> or <b>Tab</b> hacker mode</div><div><b>LMB / E</b> hack · <b>RMB</b> all-red</div>
   <div><b>H</b> toggle HUD</div><div><b>F2</b> photo / clip mode</div>
-  <div><b>M</b> mute</div><div><b>Esc</b> pause · <b>R</b> restart</div>
+  <div><b>M</b> full map · click to set a waypoint</div><div><b>Esc</b> pause · <b>R</b> retry mission</div>
+  <div><b>Z</b> mute</div><div><b>Backspace</b> decline a mission</div>
   <div><b>Shift</b> in vehicle: boost</div><div><b>Hold E</b> pick a lock</div>
   <div><b>J</b> phone · <b>Enter</b> take job</div><div><b>X</b> abandon job</div>
   <div><b>E</b> at a taxi stand: fast travel</div><div><b>↑↓ Enter</b> pick a destination</div>
 </div>
-<div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> give loot · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
+<div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> start heist's escape · <b>\`</b> unlock all · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
 
 function p2stale(g: Game) {
   const v = g.player.vehicle;
@@ -66,6 +69,9 @@ export class Hud {
   private vehEl: HTMLDivElement;
   private lastHtml: Record<string, string> = {};
   private miniT = 0;
+  private objLabel: HTMLDivElement;
+  private timerEl: HTMLDivElement;
+  private cardEl: HTMLDivElement;
   private taxiEl: HTMLDivElement;
   private bannerEl: HTMLDivElement;
   private bannerT = 0;
@@ -83,10 +89,12 @@ export class Hud {
     this.root.appendChild(this.hudLayer);
 
     const obj = h('div', 'panel objective');
-    obj.appendChild(h('div', 'label', 'OBJECTIVE'));
+    this.objLabel = h('div', 'label', 'FREE ROAM') as HTMLDivElement;
+    obj.appendChild(this.objLabel);
     this.objective = h('div', 'obj-main') as HTMLDivElement;
     this.objSub = h('div', 'obj-sub') as HTMLDivElement;
-    obj.append(this.objective, this.objSub);
+    this.timerEl = h('div', 'm-timer') as HTMLDivElement;
+    obj.append(this.objective, this.objSub, this.timerEl);
     this.moneyEl = h('div', 'money') as HTMLDivElement;
     this.jobEl = h('div', 'job') as HTMLDivElement;
     obj.append(this.moneyEl, this.jobEl);
@@ -95,7 +103,9 @@ export class Hud {
     this.escEl = h('div', 'panel escapes') as HTMLDivElement;
     this.taxiEl = h('div', 'panel phone taxi') as HTMLDivElement;
     this.bannerEl = h('div', 'district-banner') as HTMLDivElement;
-    this.hudLayer.append(this.phoneEl, this.escEl, this.taxiEl, this.bannerEl);
+    this.cardEl = h('div', 'panel mission-card') as HTMLDivElement;
+    this.cardEl.style.display = 'none';
+    this.hudLayer.append(this.phoneEl, this.escEl, this.taxiEl, this.bannerEl, this.cardEl);
 
     const heat = h('div', 'panel heat');
     this.heatEl = h('div', 'stars') as HTMLDivElement;
@@ -155,14 +165,18 @@ export class Hud {
     this.screens.title = h('div', 'screen title', `
       <div class="logo big">BLACKOUT<span>CITY</span></div>
       <div class="tagline">CUT THE POWER. ROB THE CITY.</div>
-      <button class="btn start">CLICK TO START</button>
+      <button class="btn start">NEW GAME</button>
+      <button class="btn newgame">NEW GAME</button>
       ${CONTROLS}
       <div class="credits">Every texture, model and sound is generated in code.</div>`) as HTMLDivElement;
     this.screens.pause = h('div', 'screen pause', `
       <div class="logo">PAUSED</div>
       <button class="btn resume">RESUME</button>
-      <button class="btn restart">RESTART (R)</button>
-      <button class="btn mute">MUTE (M)</button>
+      <button class="btn map">MAP (M)</button>
+      <button class="btn restart">RETRY MISSION (R)</button>
+      <button class="btn quitm">QUIT MISSION</button>
+      <button class="btn mute">MUTE (Z)</button>
+      <button class="btn newgame">NEW GAME</button>
       <button class="btn forget">CLEAR POLICE ROUTE MEMORY</button>
       ${CONTROLS}`) as HTMLDivElement;
     this.screens.results = h('div', 'screen results', '') as HTMLDivElement;
@@ -217,27 +231,46 @@ export class Hud {
     this.root.classList.toggle('photo', on);
   }
 
-  results(g: Game) {
-    const s = g.heist.stats;
-    const o = g.heist.outcome!;
-    const title = o === 'won' ? 'CLEAN GETAWAY' : o === 'busted' ? 'BUSTED' : 'WRECKED';
-    const sub = o === 'won' ? 'The city never saw you coming.' : o === 'busted' ? 'Cuffed on the pavement. Try another route.' : 'The getaway car gave up. So did you.';
-    const mm = Math.floor(s.time / 60), ss = Math.floor(s.time % 60).toString().padStart(2, '0');
-    const learned = g.routes.topStreets(3).map((r) => r.name.toUpperCase()).join(' · ') || '—';
-    this.screens.results.className = `screen results ${o}`;
+  /** intro card when you step into a marker (null hides it) */
+  missionCard(d: MissionDef | null) {
+    this.cardEl.style.display = d ? 'block' : 'none';
+    if (!d) return;
+    const t = TYPE_INFO[d.type];
+    this.cardEl.style.borderLeftColor = t.color;
+    this.cardEl.innerHTML = `
+      <div class="label" style="color:${t.color}">${t.label} · ${DISTRICTS[d.district].name}</div>
+      <div class="c-title">${d.title}</div>
+      <div class="c-giver">${d.giver}</div>
+      <div class="c-intro">${d.intro}</div>
+      <div class="label">[E] START · [BACKSPACE] NOT NOW</div>`;
+  }
+
+  /** success / fail screen */
+  missionEnd(m: Missions) {
+    const e = m.ended!;
+    const won = e.kind === 'success';
+    const rows = e.rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+    const hasCp = !!m.run && m.run.checkpoint > 0;
+    this.screens.results.className = `screen results ${won ? 'won' : 'busted'}`;
     this.screens.results.innerHTML = `
-      <div class="logo">${title}</div>
-      <div class="tagline">${sub}</div>
-      <table class="stats">
-        <tr><td>TIME</td><td>${mm}:${ss}</td></tr>
-        <tr><td>LOOT</td><td>$${s.loot.toLocaleString()}</td></tr>
-        <tr><td>HEAT PEAK</td><td>${'★'.repeat(s.heatPeak)}${'☆'.repeat(5 - s.heatPeak)}</td></tr>
-        <tr><td>HACKS USED</td><td>${s.hacks}</td></tr>
-        <tr><td>SILENT ENTRY</td><td>${s.alarmBeforeLoot ? 'NO' : o === 'won' ? 'YES +$50,000' : 'YES'}</td></tr>
-        <tr><td>POLICE NOW WATCH</td><td>${learned}</td></tr>
-      </table>
-      <button class="btn restart">PRESS R TO RESTART</button>`;
+      <div class="label">${TYPE_INFO[e.def.type].label}: ${e.def.title}</div>
+      <div class="logo">${won ? 'MISSION PASSED' : 'MISSION FAILED'}</div>
+      ${won ? '' : `<div class="tagline">${e.reason ?? ''}</div>`}
+      ${won ? `<table class="stats">${rows}</table>` : ''}
+      ${won ? '<button class="btn" data-act="continue">CONTINUE [ENTER]</button>' : `
+        <button class="btn" data-act="checkpoint">${hasCp ? 'RETRY FROM CHECKPOINT' : 'RETRY'} [ENTER]</button>
+        ${hasCp ? '<button class="btn" data-act="mission">RETRY MISSION [R]</button>' : ''}
+        <button class="btn" data-act="quit">QUIT [X]</button>`}`;
     this.show('results');
+  }
+
+  mapCanvas() {
+    if (!this.mapBase) this.buildMapBase();
+    return this.mapBase!;
+  }
+
+  get mapExtent() {
+    return HALF + 30;
   }
 
   // ------------------------------------------------------------------ per frame
@@ -245,8 +278,14 @@ export class Hud {
     this.t += dt;
     const p = g.player;
     const v = p.vehicle;
-    this.objective.textContent = g.heist.objective;
-    this.objSub.textContent = g.heist.sub;
+    this.objLabel.textContent = g.missions.panelTitle;
+    this.objective.textContent = g.missions.objective;
+    this.objSub.textContent = g.missions.sub;
+    const tl = g.missions.timeLeft;
+    const tgt = g.missions.run ? g.missions.target() : null;
+    const dist = tgt ? Math.hypot(tgt.x - g.player.worldPos.x, tgt.z - g.player.worldPos.z) : 0;
+    const timeTxt = tl !== null ? `<b class="${tl < 15 ? 'low' : ''}">${Math.floor(tl / 60)}:${String(Math.floor(tl % 60)).padStart(2, '0')}</b>` : '';
+    this.set(this.timerEl, 'timer', tl !== null || tgt ? `${timeTxt}${tgt ? ` <span>${Math.round(dist)}m</span>` : ''}` : '');
 
     // heat
     const pol = g.police;
@@ -340,7 +379,7 @@ export class Hud {
     const carried = g.loot.carriedValue;
     this.set(this.moneyEl, 'money', `$${g.loot.cash.toLocaleString()}${carried ? ` <span>· CARRYING $${carried.toLocaleString()}</span>` : ''}`);
     const a = g.jobs.active;
-    this.set(this.jobEl, 'job', a ? `<b>JOB: ${a.title}</b> ${Math.ceil(a.t)}s · ${a.done.filter(Boolean).length}/${a.done.length} <i>[X] abandon</i>` : '<i>[J] PHONE: FIXER JOBS</i>');
+    this.set(this.jobEl, 'job', a ? `<b>JOB: ${a.title}</b> ${Math.ceil(a.t)}s · ${a.done.filter(Boolean).length}/${a.done.length} <i>[X] abandon</i>` : g.missions.run ? '' : '<i>[M] MAP · [J] FIXER JOBS</i>');
     if (g.jobs.phoneOpen) {
       const rows = g.jobs.offers.map((o, i) => `<div class="${i === g.jobs.offer ? 'sel' : ''}">${i === g.jobs.offer ? '▶' : '&nbsp;'} ${o.title} <em>$${o.pay.toLocaleString()}</em></div>`).join('');
       this.set(this.phoneEl, 'phone', `<div class="label">FIXER</div>${rows}<div class="brief">${g.jobs.offers[g.jobs.offer].brief}</div><div class="label">[J] NEXT · [ENTER] TAKE IT · [BACKSPACE] CLOSE</div>`);
@@ -358,9 +397,10 @@ export class Hud {
   private updateMarker(g: Game) {
     const tgt = g.missionTarget();
     const P = g.player.worldPos;
-    const d = Math.hypot(tgt.x - P.x, tgt.z - P.z);
     const m = this.marker;
-    if (g.heist.outcome || d < 3) { m.style.display = 'none'; return; }
+    if (!tgt || g.missions.ended) { m.style.display = 'none'; return; }
+    const d = Math.hypot(tgt.x - P.x, tgt.z - P.z);
+    if (d < 3) { m.style.display = 'none'; return; }
     m.style.display = 'block';
     this.v.copy(tgt).project(g.camera);
     const W = innerWidth, H = innerHeight;
@@ -475,14 +515,55 @@ export class Hud {
       c.arc((g.police.heli.spotPos.x - P.x) * S, (g.police.heli.spotPos.z - P.z) * S, 13, 0, Math.PI * 2);
       c.stroke();
     }
-    // objective
+    // GPS route line
+    const path = g.gps.path;
+    if (path.length) {
+      c.strokeStyle = g.missions.run ? '#ffd24a' : '#46e6ff';
+      c.lineWidth = 4 / zoom;
+      c.beginPath();
+      path.forEach((p, i) => (i ? c.lineTo((p.x - P.x) * S, (p.z - P.z) * S) : c.moveTo((p.x - P.x) * S, (p.z - P.z) * S)));
+      c.stroke();
+    }
+    // things pinned to the edge of the minimap when out of range
+    const pin = (x: number, z: number) => {
+      let dx = (x - P.x) * S, dz = (z - P.z) * S;
+      const L = Math.hypot(dx, dz), max = 88 / zoom;
+      if (L > max) { dx *= max / L; dz *= max / L; }
+      return [dx, dz];
+    };
+    // mission markers, coloured by type (grey = locked; hidden while on a mission)
+    if (!g.missions.run) {
+      for (const d of g.missions.defs) {
+        const st = g.missions.status(d);
+        if (st === 'done') continue;
+        const [mx, mz] = pin(d.marker.x, d.marker.z);
+        c.save();
+        c.translate(mx, mz);
+        c.rotate(-(Math.PI + yaw)); // keep icons upright
+        c.scale(1 / zoom, 1 / zoom);
+        c.fillStyle = '#0f141c';
+        c.fillRect(-9, -9, 18, 18);
+        c.fillStyle = st === 'locked' ? '#6a6f78' : TYPE_INFO[d.type].color;
+        c.fillRect(-7, -7, 14, 14);
+        c.fillStyle = '#0a1218';
+        c.font = '14px VT323, monospace';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(TYPE_INFO[d.type].tag, 0, 1);
+        c.restore();
+      }
+    }
+    // current target
     const t = g.missionTarget();
-    c.fillStyle = '#ffd24a';
-    c.save();
-    c.translate((t.x - P.x) * S, (t.z - P.z) * S);
-    c.rotate(Math.PI / 4);
-    c.fillRect(-6, -6, 12, 12);
-    c.restore();
+    if (t) {
+      const [tx, tz] = pin(t.x, t.z);
+      c.fillStyle = g.missions.run || g.jobs.active ? '#ffd24a' : '#46e6ff';
+      c.save();
+      c.translate(tx, tz);
+      c.rotate(Math.PI / 4);
+      c.fillRect(-6 / zoom, -6 / zoom, 12 / zoom, 12 / zoom);
+      c.restore();
+    }
     c.restore();
     // player arrow (always up)
     c.fillStyle = '#46e6ff';
@@ -503,6 +584,8 @@ export class Hud {
     c.font = '16px VT323, monospace';
     const na = Math.PI + yaw;
     const nx = W / 2 + Math.sin(-na) * 84 * -1, ny = W / 2 - Math.cos(na) * 84;
+    c.textAlign = 'left';
+    c.textBaseline = 'alphabetic';
     c.fillText('N', nx - 4, ny + 5);
   }
 }

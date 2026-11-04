@@ -15,7 +15,11 @@ export interface Stats {
 
 export type Outcome = 'won' | 'busted' | 'wrecked';
 
+const ga0 = (g: Game) => !!g.getawayCar && !g.getawayCar.wrecked;
+
 export class Heist {
+  /** only true while the bank mission is running */
+  active = false;
   alarm = false;
   hasLoot = false;
   suspicion = 0;
@@ -34,7 +38,8 @@ export class Heist {
 
   constructor(private g: Game) {}
 
-  reset(clip = false) {
+  reset() {
+    this.active = false;
     this.alarm = false;
     this.hasLoot = false;
     this.suspicion = 0;
@@ -49,21 +54,39 @@ export class Heist {
     bank.lootTaken = false;
     bank.loot.visible = true;
     for (const d of bank.doors) { d.locked = true; d.target = 0; d.open = 0; d.col.enabled = true; }
-    if (clip) {
-      this.hasLoot = true;
-      this.alarm = true;
-      bank.lootTaken = true;
-      bank.loot.visible = false;
-      this.stats.loot = 250000;
-    }
     if (this.lootSpot) { const i = this.g.interactables.indexOf(this.lootSpot); if (i >= 0) this.g.interactables.splice(i, 1); }
     this.g.interactables.push(this.lootSpot = {
       pos: bank.lootPos,
       radius: 2.6,
       label: 'Grab the loot',
-      enabled: () => !this.hasLoot && !bank.lootTaken,
+      enabled: () => this.active && !this.hasLoot && !bank.lootTaken,
       action: () => this.grabLoot(),
     });
+  }
+
+  /** mission start: a clean bank with guards back on patrol */
+  begin() {
+    this.reset();
+    this.active = true;
+    this.g.guards.reset();
+  }
+
+  /** mission over, however it went */
+  end() {
+    this.reset();
+    this.g.police.minHeat = 0;
+    this.g.guards.reset();
+  }
+
+  /** checkpoint: the bag is already in hand */
+  giveLoot() {
+    const bank = this.g.bank;
+    this.hasLoot = true;
+    this.alarm = true;
+    bank.lootTaken = true;
+    bank.loot.visible = false;
+    this.stats.loot = 250000;
+    this.stats.alarmBeforeLoot = true;
   }
 
   onDoorHacked(d: Door) {
@@ -103,7 +126,7 @@ export class Heist {
   spotted(source: 'camera' | 'guard', dt: number) {
     const g = this.g;
     const P = g.player.worldPos;
-    if (this.alarm || !g.bank.isRestricted(P.x, P.z)) return;
+    if (!this.active || this.alarm || !g.bank.isRestricted(P.x, P.z)) return;
     this.seenThisFrame = true;
     this.suspicion += dt * (source === 'guard' ? 1.1 : 0.7);
     if (this.suspicion >= 1) this.triggerAlarm(source === 'guard' ? 'GUARD RAISED THE ALARM' : 'CAMERA TRIPPED THE ALARM');
@@ -115,6 +138,13 @@ export class Heist {
     this.seenThisFrame = false;
     if (this.alarm) this.alarmT += dt;
     this.stats.heatPeak = Math.max(this.stats.heatPeak, g.police.heat);
+    if (!this.active) {
+      // the garage stays shut outside the mission
+      this.garageOpen = 0;
+      g.city.garageDoor.position.y = 0.15;
+      if (g.garageDoorCol) g.garageDoorCol.enabled = true;
+      return;
+    }
     if (this.outcome) return;
     this.stats.time = g.time - this.stats.start;
 
@@ -141,8 +171,8 @@ export class Heist {
         this.target.copy(bank.lootPos);
       }
     } else if (!v) {
-      this.objective = 'Get to the getaway car';
-      this.sub = 'Any car works — the getaway is behind the bank';
+      this.objective = 'Get to a car';
+      this.sub = ga0(g) ? 'The getaway is behind the bank, but anything with wheels will do' : 'Getaway car\'s gone. Steal something';
       const ga = g.getawayCar;
       if (ga && !ga.wrecked) this.target.copy(ga.pos).setY(1.5);
       else this.target.copy(P);
@@ -168,15 +198,17 @@ export class Heist {
       if (unseen && this.dropT > 0.6) this.finish('won');
     } else this.dropT = 0;
 
-    // wrecked during the escape
-    if (v && v.wrecked && this.hasLoot && g.police.heat > 0) this.finish('wrecked');
   }
 
   finish(o: Outcome) {
     if (this.outcome) return;
     this.outcome = o;
     this.stats.time = this.g.time - this.stats.start;
-    if (o !== 'won') this.stats.loot = 0;
-    this.g.onOutcome(o);
+    if (o !== 'won') { this.stats.loot = 0; return; }
+    const g = this.g;
+    g.hud.toast('CLEAN GETAWAY', 'win');
+    g.police.minHeat = 0;
+    g.police.setHeat(0);
+    g.missions.complete();
   }
 }

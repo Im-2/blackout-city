@@ -136,7 +136,7 @@ export class HackSystem {
       const isVault = d.name === 'Vault door';
       this.hackables.push({
         kind: 'door', label: d.name, pos: d.pos, size: new THREE.Vector3(isVault ? 1 : 2.4, 3, isVault ? 3.2 : 0.8), range: isVault ? 12 : 30, ref: d,
-        available: () => d.locked && (!isVault || g.bank.isInside(g.player.worldPos.x, g.player.worldPos.z)),
+        available: () => g.heist.active && d.locked && (!isVault || g.bank.isInside(g.player.worldPos.x, g.player.worldPos.z)),
         act: () => {
           g.bank.openDoor(d);
           g.audio.unlock();
