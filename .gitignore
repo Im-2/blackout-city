@@ -1,5 +1,35 @@
+# dependencies + build
 node_modules
 dist
-.DS_Store
-*.log
+
+# secrets + hosting
+.env
+.env.*
 .vercel
+*.pem
+*.key
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea
+.vscode
+*.swp
+
+# logs and temporary files
+*.log
+*.tmp
+*.bak
+tmp/
+temp/
+
+# recordings and other large files
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.avi
+*.zip
+*.rar
+*.7z

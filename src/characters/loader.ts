@@ -16,25 +16,17 @@ const FILES: Record<ModelKind, string> = {
 
 const models = new Map<ModelKind, GLTF>();
 
-async function exists(url: string): Promise<boolean> {
-  try {
-    const r = await fetch(url, { method: 'HEAD' });
-    const ct = r.headers.get('content-type') ?? '';
-    // Dev servers answer unknown paths with index.html — treat html as missing.
-    return r.ok && !ct.includes('text/html');
-  } catch {
-    return false;
-  }
-}
+/** the .glb files in assets/models, listed by vite.config.ts when the server or build starts */
+declare const __GLB_MODELS__: string[];
 
-/** Probe for optional GLBs. Never throws; missing files are simply skipped. */
+/** Load the optional GLBs that exist. Never throws; a bad file is simply skipped. */
 export async function loadCharacterModels(onProgress?: (msg: string) => void): Promise<string[]> {
   const loader = new GLTFLoader();
   const found: string[] = [];
   await Promise.all(
     (Object.keys(FILES) as ModelKind[]).map(async (k) => {
       const url = `${import.meta.env.BASE_URL}assets/models/${FILES[k]}`;
-      if (!(await exists(url))) return;
+      if (!__GLB_MODELS__.includes(FILES[k])) return; // asking for a missing file is a 404 in the console
       try {
         const gltf = await loader.loadAsync(url);
         models.set(k, gltf);
