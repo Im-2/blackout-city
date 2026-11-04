@@ -126,7 +126,8 @@ export class FullMap {
       return `<div class="row"><i style="background:${col}"></i>${d.title}${done ? ' ✓' : ''}${st === 'locked' ? ' <em>LOCKED</em>' : ''}</div>`;
     }).join('');
     const types = Object.values(TYPE_INFO).map((t) => `<span style="color:${t.color}">■ ${t.label}</span>`).join(' ');
-    this.legend.innerHTML = `<div class="label">MISSIONS</div>${rows}<div class="label" style="margin-top:6px">TYPES</div><div class="types">${types}</div>`;
+    const places = g.activities.spots.filter((s) => s.pin || s.tag === 'J').map((s) => `<div class="row"><i style="background:${g.activities.iconColor(s)}"></i>${s.name}</div>`).join('');
+    this.legend.innerHTML = `<div class="label">MISSIONS + RACES</div>${rows}<div class="label" style="margin-top:6px">STUNT SPOTS</div>${places}<div class="label" style="margin-top:6px">TYPES</div><div class="types">${types}</div>`;
   }
 
   update(dt: number) {
@@ -196,6 +197,7 @@ export class FullMap {
     for (const s of g.escapes.stations) this.box(this.sx(s.entrance.x), this.sy(s.entrance.z), 'M', '#6a9fd8');
     for (const [t, , x, z, col] of PLACES) this.box(this.sx(x), this.sy(z), t, col);
     houseIcon(c, this.sx(-28), this.sy(46), 1);
+    for (const s of g.activities.spots) this.box(this.sx(s.x), this.sy(s.z), g.activities.iconTag(s), g.activities.iconColor(s));
 
     // police activity
     const blink = Math.sin(this.t * 12) > 0;
@@ -229,6 +231,7 @@ export class FullMap {
         tip = `<b>${d.title}</b> · ${TYPE_INFO[d.type].label} · ${d.giver}<br>${st === 'locked' ? `LOCKED: ${d.unlock?.hint}` : d.intro}`;
       }
     }
+    for (const s of g.activities.spots) if (!tip && Math.hypot(mx - this.sx(s.x), my - this.sy(s.z)) < 12) tip = `<b>${s.name}</b> · ${TYPE_INFO[s.type].label}<br>${s.intro}`;
     if (!tip && Math.hypot(mx - this.sx(-28), my - this.sy(46)) < 14) tip = '<b>Home</b> · front door, taxi stand. Sleep here to save.';
     for (const [, name, x, z] of PLACES) if (!tip && Math.hypot(mx - this.sx(x), my - this.sy(z)) < 12) tip = name;
     for (const s of g.travel.stands) if (!tip && Math.hypot(mx - this.sx(s.x), my - this.sy(s.z)) < 12) tip = `Taxi stand: ${s.name}`;

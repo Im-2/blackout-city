@@ -44,6 +44,13 @@ import { Gps } from '../map/gps';
 import { Missions } from '../missions/missions';
 import { FullMap } from '../ui/fullmap';
 import { HomeUi } from '../ui/homeui';
+import { Activities } from '../activities/activities';
+import { Bikes } from '../activities/bikes';
+import { Stunts } from '../activities/stunts';
+import { Tricks } from '../activities/tricks';
+import { Races } from '../activities/races';
+import { Reputation } from '../reputation/reputation';
+import { Records } from '../save/records';
 import { Home } from '../world/home';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results' | 'map' | 'menu';
@@ -97,6 +104,13 @@ export class Game {
   missions!: Missions;
   map!: FullMap;
   home!: Home;
+  activities!: Activities;
+  bikes!: Bikes;
+  stunts!: Stunts;
+  tricks!: Tricks;
+  races!: Races;
+  rep!: Reputation;
+  records = new Records();
   homeUi!: HomeUi;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
@@ -186,12 +200,18 @@ export class Game {
     this.loot = new Loot(this);
     this.shop = new Shop(this);
     this.jobs = new Jobs(this);
+    this.rep = new Reputation(this);
+    this.activities = new Activities(this);
     this.hack = new HackSystem(this);
     await step(0.82, 'opening shops');
     this.buildings = new Buildings(this).build();
     this.home = this.buildings.home;
     this.escapes = new Escapes(this).build();
     this.travel = new FastTravel(this).build();
+    this.stunts = new Stunts(this).build();
+    this.bikes = new Bikes(this).build();
+    this.tricks = new Tricks(this);
+    this.races = new Races(this);
     this.gps = new Gps(this);
     this.missions = new Missions(this);
     this.map = new FullMap(this);
@@ -357,6 +377,9 @@ export class Game {
     this.news.reset();
     this.disguise.reset();
     this.home.onWorldReset();
+    this.bikes.reset();
+    this.tricks.reset();
+    this.rep.reset();
     this.home.refreshDisplays();
 
     if (clip) {
@@ -451,6 +474,7 @@ export class Game {
   // ------------------------------------------------------------------ events
   onCarjack(v: Vehicle) {
     this.peds.ejectDriver(v.pos.clone());
+    this.news.report('carjack', v.pos.x, v.pos.z);
     this.audio.door();
     if (v.isCop) this.police.crime(Math.max(2, this.police.heat), 'stole a cruiser');
     else if (this.police.units.some((u) => u.pos.distanceTo(v.pos) < 40)) this.police.crime(1, 'carjacking');
@@ -594,6 +618,7 @@ export class Game {
     this.city.flushInstances();
     this.travel.update();
     this.buildings.update(dt);
+    this.bikes.update();
     this.escapes.update(dt);
     this.jobs.update(dt);
     this.world.update(dt);
@@ -602,7 +627,11 @@ export class Game {
     this.news.update(realDt);
     this.hack.update(realDt, dt);
     this.heist.update(dt);
+    this.races.update(dt);
     this.missions.update(dt);
+    this.tricks.update(dt);
+    this.activities.update(realDt);
+    this.rep.update(dt);
     this.gps.update(realDt);
     this.bank.update(dt, this.time, this.heist.alarm);
 

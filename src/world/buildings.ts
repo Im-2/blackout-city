@@ -58,6 +58,9 @@ const RESERVED: Record<string, [number, number]> = {
   tower: [6, 6],
   warehouse: [8, 7],
   arcade: [3, 6],
+  stuntpark: [6, 10],
+  longjump: [4, 10],
+  shoreleap: [3, 11],
 };
 
 export class Buildings {
@@ -204,7 +207,9 @@ export class Buildings {
             g.fx.spawn('money', new THREE.Vector3(-35.6, 1.4, 13.2), 14);
             g.audio.cash();
             clerk.state = 'handsup';
-            this.caller(s, clerk, new THREE.Vector3(-35.4, 0, 15.2), 'store');
+            // a known name doesn't get reported: they just hand it over
+            if (g.rep.tierHere >= 2) g.hud.say('CLERK', 'Here, take it. I didn\'t see a thing.');
+            else this.caller(s, clerk, new THREE.Vector3(-35.4, 0, 15.2), 'store');
             if (!this.camBlind(s)) g.police.crime(1, 'store camera');
           },
         });

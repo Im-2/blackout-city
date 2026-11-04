@@ -47,6 +47,9 @@ interface Agent {
   spot: Station | null;
   /** no free spot nearby for a stationary role */
   parked: boolean;
+  /** stopped to look at the player */
+  watching?: boolean;
+  noticeCD?: number;
 }
 
 interface Station { x: number; z: number; heading: number; anim: AnimState; taken: Agent | null; }
@@ -70,6 +73,7 @@ export class Pedestrians {
   private icons: HTMLDivElement[] = [];
   private dogPool: THREE.Group[] = [];
   private screamT = 0;
+  private bubbles: { el: HTMLDivElement; a: Agent | null; t: number }[] = [];
   stats = { total: 0, full: 0, ghost: 0, calling: 0 };
 
   constructor(private g: Game) {
@@ -83,6 +87,37 @@ export class Pedestrians {
       g.hud.root.appendChild(d);
       this.icons.push(d);
     }
+    for (let i = 0; i < 3; i++) {
+      const d = document.createElement('div');
+      d.className = 'ped-say';
+      d.style.display = 'none';
+      g.hud.root.appendChild(d);
+      this.bubbles.push({ el: d, a: null, t: 0 });
+    }
+  }
+
+  /** somebody on the street knows that face */
+  recognise(tier: number, disguised: boolean) {
+    const g = this.g;
+    const P = g.player.pos;
+    if (Math.random() > (disguised ? 0.1 : 0.22) * tier) return;
+    const b = this.bubbles.find((x) => x.t <= 0);
+    if (!b) return;
+    let best: Agent | null = null, bd = 12;
+    for (const a of this.agents) {
+      if (a.off || a.role !== 'walker' || (a.state !== 'walk' && a.state !== 'idle') || (a.noticeCD ?? 0) > g.time) continue;
+      const d = Math.hypot(a.x - P.x, a.z - P.z);
+      if (d > 3 && d < bd && g.col.lineOfSight(a.x, a.y + 1.6, a.z, P.x, P.y + 1.4, P.z)) { bd = d; best = a; }
+    }
+    if (!best) return;
+    best.noticeCD = g.time + 40;
+    const scared = g.police.heat > 0 || (tier >= 3 && Math.random() < 0.3);
+    const lines = scared ? ['IT\'S THEM! RUN!', 'GET AWAY FROM ME!', 'THEY\'RE ON THE NEWS!'] : [['DO I KNOW YOU?'], ['SEEN YOU SOMEWHERE...', 'YOU LOOK FAMILIAR'], ['THAT\'S THE ONE FROM THE NEWS', 'HEY, LOOK WHO IT IS'], ['NICE WORK OUT THERE', 'CAN I GET A PHOTO?', 'THAT\'S THE ONE!'], ['YOU RUN THIS CITY!', 'A LEGEND, RIGHT THERE!']][tier];
+    b.el.textContent = lines[Math.floor(Math.random() * lines.length)];
+    b.a = best;
+    b.t = 2.6;
+    if (scared) this.scare(best, P.x, P.z, false);
+    else { best.state = 'idle'; best.timer = 3; best.watching = true; }
   }
 
   // ------------------------------------------------------------------ graph
@@ -398,7 +433,7 @@ export class Pedestrians {
 
   private animFor(a: Agent): AnimState {
     switch (a.state) {
-      case 'station': case 'wait': case 'idle': return a.anchor ? a.anchor.anim : a.type === 'teen' && a.state === 'idle' ? 'phone' : 'idle';
+      case 'station': case 'wait': case 'idle': if (a.watching) return 'phone'; return a.anchor ? a.anchor.anim : a.type === 'teen' && a.state === 'idle' ? 'phone' : 'idle';
       case 'calling': return 'phone';
       case 'knocked': return 'fall';
       case 'handsup': return 'handsup';
@@ -465,7 +500,8 @@ export class Pedestrians {
         break;
       }
       case 'idle':
-        if (a.timer < 0) { a.state = 'walk'; a.timer = this.rng.range(6, 18); }
+        if (a.watching) { const P = g.player.worldPos; a.heading = dampAngle(a.heading, Math.atan2(P.x - a.x, P.z - a.z), 6, dt); }
+        if (a.timer < 0) { a.watching = false; a.state = 'walk'; a.timer = this.rng.range(6, 18); }
         break;
       case 'station':
         if (a.anchor) {
@@ -661,6 +697,15 @@ export class Pedestrians {
       (el.querySelector('i') as HTMLElement).style.width = `${Math.min(1, a.callT / 5.5) * 100}%`;
     }
     for (; i < this.icons.length; i++) this.icons[i].style.display = 'none';
+    for (const b of this.bubbles) {
+      if (b.t <= 0) continue;
+      b.t -= 0.05;
+      if (b.t <= 0 || !b.a || b.a.off) { b.t = 0; b.el.style.display = 'none'; continue; }
+      this.v3.set(b.a.x, b.a.y + 2.25, b.a.z).project(cam);
+      if (this.v3.z > 1) { b.el.style.display = 'none'; continue; }
+      b.el.style.display = 'block';
+      b.el.style.transform = `translate(${((this.v3.x * 0.5 + 0.5) * innerWidth) | 0}px, ${((-this.v3.y * 0.5 + 0.5) * innerHeight) | 0}px) translate(-50%, -100%)`;
+    }
   }
 
   // ------------------------------------------------------------------ dogs

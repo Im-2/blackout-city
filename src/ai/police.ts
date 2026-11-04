@@ -148,6 +148,7 @@ export class Police {
 
   private onPursuitStart() {
     this.stakeoutDone = false;
+    this.g.news.report('pursuit', this.g.player.worldPos.x, this.g.player.worldPos.z);
     // first responders arrive fast so the chase starts right away
     this.spawnT = 2.5;
     for (let i = 0; i < 2; i++) this.spawnUnit('pursuit', undefined, undefined, 50, 110);

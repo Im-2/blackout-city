@@ -5,6 +5,7 @@ import { Vehicle } from '../vehicles/vehicle';
 import { DIMS, CarKind } from '../vehicles/carMesh';
 import { colorFor } from '../ai/traffic';
 import { Rng } from '../core/math';
+import { districtAt } from '../map/districts';
 
 const ALL_KINDS = Object.keys(DIMS) as CarKind[];
 let cycleI = 0;
@@ -33,6 +34,7 @@ export function updateDebug(g: Game) {
     g.save.data.unlockAll = !g.save.data.unlockAll;
     g.hud.toast(g.save.data.unlockAll ? 'DEBUG: ALL MISSIONS UNLOCKED' : 'DEBUG: UNLOCKS NORMAL', 'dim');
   }
+  if (inp.debugKey('Semicolon')) { const P = g.player.worldPos; g.rep.add(districtAt(P.x, P.z), 25); g.hud.toast(`DEBUG: REP ${g.rep.overall}`, 'dim'); }
   if (inp.debugKey('KeyO')) { g.world.skipHours(3); g.hud.toast(`DEBUG: ${Math.floor(g.world.hour)}:00`, 'dim'); }
   if (inp.debugKey('KeyI')) g.world.toggleRain();
   if (inp.debugKey('KeyB')) spawnBeside(g, 'bicycle');

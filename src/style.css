@@ -216,3 +216,22 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; }
 .hu-sub { font-size: 16px; color: var(--dim); line-height: 1.05; text-transform: none; }
 .hu-row .bar { height: 7px; margin-top: 2px; }
 .hu-foot { font-size: 16px; color: var(--dim); border-top: 1px solid #22303d; padding-top: 4px; cursor: pointer; }
+
+.money em { font-style: normal; color: var(--dim); font-size: 16px; margin-left: 6px; }
+.trick-feed { position: absolute; right: 18px; top: 42%; text-align: right; font-size: 21px; color: #e8e2d0; text-shadow: 2px 2px 0 #000; pointer-events: none; }
+.trick-feed b { font-weight: normal; color: #b6ff3a; }
+.trick-feed i { font-style: normal; color: #ffd24a; }
+.trick-feed u { text-decoration: none; color: #ff5a4a; }
+.trick-combo { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); min-width: 200px; text-align: center; color: #fff1d0; text-shadow: 2px 2px 0 #000; pointer-events: none; }
+.trick-combo span { display: block; font-size: 20px; color: #b6ff3a; }
+.trick-combo b { display: block; font-weight: normal; font-size: 36px; line-height: 1; }
+.trick-combo i { display: block; height: 4px; margin-top: 3px; background: #b6ff3a; }
+.race-hud { top: 18px; left: 50%; transform: translateX(-50%); padding: 4px 16px; text-align: center; border-top: 4px solid #ff5ad8; }
+.r-pos { font-size: 46px; line-height: 1; color: #fff1d0; }
+.r-pos small { font-size: 22px; color: var(--dim); }
+.r-row { font-size: 18px; }
+.r-t { color: #ff5ad8; }
+.race-count { position: absolute; left: 50%; top: 32%; transform: translateX(-50%); font-size: 130px; line-height: 1; color: #ff5ad8; text-shadow: 5px 5px 0 #000; pointer-events: none; }
+.ped-say { position: absolute; left: 0; top: 0; padding: 0 6px; font-size: 17px; color: #0a1218; background: #fff1d0; box-shadow: 0 0 0 2px #000; white-space: nowrap; pointer-events: none; }
+#ui:not([data-state='playing']) .ped-say { display: none !important; }
+#ui.hud-hidden .ped-say { display: none !important; }

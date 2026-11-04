@@ -5,6 +5,7 @@ import { BLOCKS, HALF, PITCH, ROAD_HALF, SHORE, blockBounds, BANK_BLOCK, DROP_BL
 import { DISTRICTS, districtOfBlock } from '../map/districts';
 import { TYPE_INFO, MissionDef } from '../missions/types';
 import type { Missions } from '../missions/missions';
+import { repTitle } from '../reputation/reputation';
 import type { Game } from '../core/game';
 
 const h = (tag: string, cls = '', html = '') => {
@@ -27,8 +28,9 @@ const CONTROLS = `
   <div><b>J</b> phone · <b>Enter</b> take job</div><div><b>X</b> abandon job</div>
   <div><b>E</b> at a taxi stand: fast travel</div><div><b>↑↓ Enter</b> pick a destination</div>
   <div><b>E</b> at your front door: go home</div><div><b>Sleep</b> in your bed to save</div>
+  <div><b>Hold F</b> on a bike: wheelie · <b>F+S</b> stoppie</div><div><b>In the air</b> A/D spin · <b>F+W/S</b> flip</div>
 </div>
-<div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> start heist's escape · <b>\`</b> unlock all · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
+<div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> start heist's escape · <b>\`</b> unlock all · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>;</b> +25 rep · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
 
 /** the HOME icon, on the minimap and the full map */
 export function houseIcon(c: CanvasRenderingContext2D, x: number, y: number, s: number) {
@@ -262,6 +264,32 @@ export class Hud {
       <div class="label">[E] START · [BACKSPACE] NOT NOW</div>`;
   }
 
+  /** a first-visit card for an activity spot (it doesn't stop you) */
+  infoCard(s: { name: string; type: keyof typeof TYPE_INFO; intro: string }) {
+    const t = TYPE_INFO[s.type];
+    this.cardEl.style.display = 'block';
+    this.cardEl.style.borderLeftColor = t.color;
+    this.cardEl.innerHTML = `
+      <div class="label" style="color:${t.color}">${t.label}</div>
+      <div class="c-title">${s.name}</div>
+      <div class="c-intro">${s.intro}</div>`;
+  }
+
+  /** somebody talking to you, in the radio slot */
+  say(who: string, text: string) {
+    this.radioEl.innerHTML = `<span class="tag">${who}</span> "${text}"`;
+    this.radioEl.classList.add('on');
+    this.radioT = 5;
+  }
+
+  /** a HUD element that belongs to another system */
+  addPanel(cls: string) {
+    const el = h('div', cls) as HTMLDivElement;
+    el.style.display = 'none';
+    this.hudLayer.appendChild(el);
+    return el;
+  }
+
   /** success / fail screen */
   missionEnd(m: Missions) {
     const e = m.ended!;
@@ -394,7 +422,7 @@ export class Hud {
   /** cash, job tracker, fixer phone, escape options, police description */
   private updateMissionPanels(g: Game) {
     const carried = g.loot.carriedValue;
-    this.set(this.moneyEl, 'money', `$${g.loot.cash.toLocaleString()}${carried ? ` <span>· CARRYING $${carried.toLocaleString()}</span>` : ''}`);
+    this.set(this.moneyEl, 'money', `$${g.loot.cash.toLocaleString()}${carried ? ` <span>· CARRYING $${carried.toLocaleString()}</span>` : ''} <em>REP ${g.rep.overall} ${repTitle(g.rep.overall)}</em>`);
     const a = g.jobs.active;
     this.set(this.jobEl, 'job', a ? `<b>JOB: ${a.title}</b> ${Math.ceil(a.t)}s · ${a.done.filter(Boolean).length}/${a.done.length} <i>[X] abandon</i>` : g.missions.run ? '' : '<i>[M] MAP · [J] FIXER JOBS</i>');
     if (g.jobs.phoneOpen) {
@@ -578,6 +606,31 @@ export class Hud {
     c.scale(1 / zoom, 1 / zoom);
     houseIcon(c, 0, 0, 0.8);
     c.restore();
+    // activity spots: pinned ones stay on the edge, the rest show when they're close
+    if (!g.missions.run) {
+      for (const s of g.activities.spots) {
+        const far = Math.hypot(s.x - P.x, s.z - P.z) * S > 88 / zoom;
+        if (far && !s.pin) continue;
+        const [ax, az] = pin(s.x, s.z);
+        c.save();
+        c.translate(ax, az);
+        c.rotate(-(Math.PI + yaw));
+        c.scale(1 / zoom, 1 / zoom);
+        c.fillStyle = '#0f141c';
+        c.fillRect(-8, -8, 16, 16);
+        c.fillStyle = g.activities.iconColor(s);
+        c.fillRect(-6, -6, 12, 12);
+        c.fillStyle = '#0a1218';
+        c.font = '13px VT323, monospace';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(g.activities.iconTag(s), 0, 1);
+        c.restore();
+      }
+    }
+    // rivals during a race
+    c.fillStyle = '#ff5ad8';
+    for (const p of g.races.blips()) c.fillRect((p.x - P.x) * S - 5, (p.z - P.z) * S - 5, 10, 10);
     // current target
     const t = g.missionTarget();
     if (t) {

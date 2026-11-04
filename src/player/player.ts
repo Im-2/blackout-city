@@ -105,7 +105,7 @@ export class Player {
     const g = this.g;
     const inp = g.input;
     if (g.travel.open || (g.fading && !this.vehicle)) { this.view.update(dt, 'idle', 0); return; }
-    if (g.missions.card) {
+    if (g.missions.card || g.races.frozen) {
       // hold still for the intro card
       const v = this.vehicle;
       if (v) { v.throttle = 0; v.steer = 0; v.handbrake = true; }
@@ -296,13 +296,14 @@ export class Player {
     }
     if (!best)
       for (const v of g.vehicles) {
-        if (v.wrecked || v.driver === 'player') continue;
+        if (v.wrecked || v.driver === 'player' || v.driver === 'racer') continue;
         const d = Math.hypot(v.pos.x - this.pos.x, v.pos.z - this.pos.z);
         if (d < 3.9 && d < bd) { bd = d; best = v; }
       }
     this.focus = best;
     if (!best) this.focusLabel = '';
     else if ('action' in best) this.focusLabel = best.label;
+    else if (best.rental && best.locked) this.focusLabel = g.save.data.cash >= best.rental ? `Rent ${best.label.toLowerCase()}: $${best.rental}` : `Rent ${best.label.toLowerCase()}: $${best.rental} (or hold E to pick the lock)`;
     else this.focusLabel = best.locked ? `Hold E: pick lock — ${best.label}` : best.isCop ? `Steal ${best.label.toLowerCase()}` : best.driver === 'traffic' ? `Carjack ${best.label.toLowerCase()}` : best.isGetaway ? 'Drive getaway car' : `${best.two ? 'Ride' : 'Drive'} ${best.label.toLowerCase()}`;
   }
 
@@ -333,7 +334,14 @@ export class Player {
     const f = this.focus;
     if (!f) return;
     if ('action' in f) f.action();
-    else if (f.locked) { this.pickTarget = f; this.pick = 0; }
+    else if (f.rental && f.locked && this.g.save.data.cash >= f.rental) {
+      this.g.save.data.cash -= f.rental;
+      this.g.audio.cash();
+      this.g.hud.toast(`RENTED: ${f.label.toUpperCase()} — $${f.rental}`, 'cool');
+      f.rental = undefined;
+      f.locked = false;
+      this.enterVehicle(f);
+    } else if (f.locked) { this.pickTarget = f; this.pick = 0; }
     else this.enterVehicle(f);
   }
 
@@ -366,8 +374,10 @@ export class Player {
     v.throttle = 0;
     v.steer = 0;
     v.handbrake = true;
+    v.trick = 0;
     v.object.remove(this.view.root);
     g.scene.add(this.view.root);
+    this.view.root.rotation.set(0, this.heading, 0);
     this.vehicle = null;
     // driver door is on the car's left (+x local)
     const lx = Math.cos(v.heading), lz = -Math.sin(v.heading);
@@ -410,6 +420,8 @@ export class Player {
     v.steer = inp.steer;
     v.handbrake = inp.held('handbrake');
     v.boost = inp.held('boost');
+    v.trick = v.two && inp.held('trick') ? (inp.throttle < 0 ? -1 : 1) : 0;
+    if (v.two) this.leanRider(v);
     this.pos.copy(v.pos);
     this.heading = v.heading;
     this.view.update(dt, v.two ? 'ride' : 'drive', Math.abs(v.speed));
@@ -418,6 +430,15 @@ export class Player {
       else this.exitVehicle();
     }
     void clamp;
+  }
+
+  /** the rider goes with the bike: wheelies, stoppies and lean */
+  private leanRider(v: Vehicle) {
+    const d = v.parts.dims;
+    const y = d.wheelR + d.seatY, z = d.seatZ, p = v.bodyPitch, r = v.bodyRoll;
+    const root = this.view.root;
+    root.rotation.set(p, 0, r);
+    root.position.set(-y * Math.sin(r), y * Math.cos(p) * Math.cos(r) - z * Math.sin(p) + v.parts.body.position.y, y * Math.sin(p) + z * Math.cos(p));
   }
 
   private syncView() {

@@ -2,7 +2,7 @@
 // drift, collision vs AABBs (3 circles), damage, lights.
 import * as THREE from 'three';
 import { buildCar, CarKind, CarParts, LABELS, repaint } from './carMesh';
-import { clamp, damp } from '../core/math';
+import { clamp, damp, wrapAngle } from '../core/math';
 import { surfaceHeight } from '../world/layout';
 import type { Collision } from '../world/collision';
 
@@ -42,7 +42,9 @@ export const PARAMS: Record<CarKind, CarParams> = {
   swat: P(29, 12, 26, 8, 1.5, 1.9, 2.6),
 };
 
-export type Driver = 'none' | 'player' | 'traffic' | 'cop';
+export type Driver = 'none' | 'player' | 'traffic' | 'cop' | 'racer';
+
+const GRAVITY = 20;
 
 export interface ImpactEvent { v: Vehicle; other: Vehicle | null; impact: number; x: number; y: number; z: number; nx: number; nz: number; }
 
@@ -96,6 +98,19 @@ export class Vehicle {
   wet = 0;
   isEmergency: boolean;
   private lean = 0;
+  /** rent instead of stealing (price in $) */
+  rental?: number;
+  /** two-wheelers: 1 = lean back for a wheelie, -1 = lean forward for a stoppie */
+  trick = 0;
+  /** airborne off a ramp or a drop */
+  air = false;
+  vy = 0;
+  private climb = 0;
+  private airT = 0;
+  private airYaw = 0;
+  private flip = 0;
+  /** set on touchdown, consumed by the trick system */
+  landed: { time: number; yaw: number; flip: number; flipLeft: number } | null = null;
 
   constructor(public kind: CarKind, color: string, public col: Collision) {
     this.color = color;
@@ -138,14 +153,57 @@ export class Vehicle {
     this.pos.set(x, surfaceHeight(x, z, 0.2), z);
     this.heading = heading;
     this.vx = this.vz = this.yawRate = this.spin = 0;
+    this.vy = this.climb = this.flip = 0;
+    this.air = false;
+    this.landed = null;
     this.sync();
   }
 
   get fwdX() { return Math.sin(this.heading); }
   get fwdZ() { return Math.cos(this.heading); }
   get speedAbs() { return Math.hypot(this.vx, this.vz); }
+  get wheelie() { return !this.air && this.pitch < -0.3; }
+  get stoppie() { return !this.air && this.pitch > 0.25; }
+  get bodyPitch() { return this.pitch; }
+  get bodyRoll() { return this.roll; }
+
+  /** ballistic: momentum carries you, the controls spin and flip two-wheelers */
+  private updateAir(dt: number, impacts: ImpactEvent[]) {
+    const two = this.two;
+    const spinRate = two ? 6.2 : 0.8;
+    const dYaw = -(this.wrecked ? 0 : this.steer) * spinRate * dt;
+    this.heading += dYaw;
+    this.airYaw += dYaw;
+    // flips need the trick key: everyone leaves a ramp with the throttle held
+    if (two && !this.wrecked && this.trick) this.flip += this.throttle * 6 * dt;
+    this.airT += dt;
+    this.vy -= GRAVITY * dt;
+    this.pos.x += this.vx * dt;
+    this.pos.z += this.vz * dt;
+    this.pos.y += this.vy * dt;
+    this.wheelRot += (this.speed * dt) / this.parts.dims.wheelR;
+    this.roll = damp(this.roll, 0, 6, dt);
+    this.pitch = damp(this.pitch, 0, 6, dt);
+    const gy = surfaceHeight(this.pos.x, this.pos.z, this.pos.y);
+    if (this.pos.y <= gy) {
+      const impact = -this.vy;
+      this.pos.y = gy;
+      this.air = false;
+      this.vy = this.climb = 0;
+      this.landed = { time: this.airT, yaw: this.airYaw, flip: this.flip, flipLeft: wrapAngle(this.flip) };
+      this.flip = 0;
+      this.yawRate = 0;
+      this.vx *= 0.97;
+      this.vz *= 0.97;
+      this.damage(Math.max(0, impact - 14) * (two ? 1 : 2));
+      if (impact > 6) impacts.push({ v: this, other: null, impact: impact * 0.5, x: this.pos.x, y: this.pos.y, z: this.pos.z, nx: 0, nz: 0 });
+    }
+    this.collideStatic(impacts);
+    this.sync();
+  }
 
   update(dt: number, impacts: ImpactEvent[]) {
+    if (this.air) { this.updateAir(dt, impacts); return; }
     const p = this.p;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
@@ -168,6 +226,8 @@ export class Vehicle {
       if (vf > 0.8) { a = p.brake * thr; braking = true; }
       else a = vf > -p.reverse ? p.accel * 0.7 * thr : 0;
     }
+    // nose down on a stoppie: you ride the front brake, you don't stamp on it
+    if (this.trick < 0 && braking) a *= 0.3;
     vf += a * dt;
     const coast = thr === 0 ? 0.45 : 0.08;
     vf -= vf * coast * dt;
@@ -195,8 +255,17 @@ export class Vehicle {
 
     this.pos.x += this.vx * dt;
     this.pos.z += this.vz * dt;
+    const prevY = this.pos.y;
     const gy = surfaceHeight(this.pos.x, this.pos.z, this.pos.y);
-    this.pos.y = gy > this.pos.y ? damp(this.pos.y, gy, 18, dt) : Math.max(gy, this.pos.y - 9 * dt);
+    if (gy > this.pos.y) this.pos.y = gy - this.pos.y > 0.2 ? gy : damp(this.pos.y, gy, 18, dt);
+    else if (this.pos.y - gy > 0.3) {
+      // the ground fell away: off a ramp or a ledge
+      this.air = true;
+      this.vy = Math.max(0, this.climb);
+      this.airT = this.airYaw = this.flip = 0;
+      this.landed = null;
+    } else this.pos.y = Math.max(gy, this.pos.y - 9 * dt);
+    this.climb = damp(this.climb, (this.pos.y - prevY) / Math.max(dt, 1e-4), 25, dt);
 
     this.speed = vf;
     this.slip = Math.abs(vs);
@@ -211,7 +280,8 @@ export class Vehicle {
       // lean into turns, wheelie on boost
       this.lean = damp(this.lean, clamp(this.yawRate * sp * 0.045, -0.65, 0.65), 7, dt);
       this.roll = this.lean;
-      this.pitch = damp(this.pitch, boost && sp < 22 && this.kind !== 'scooter' ? -0.42 : clamp(-a * 0.006, -0.08, 0.08), 5, dt);
+      const lean = this.trick > 0 && sp > 1.5 ? -0.62 : this.trick < 0 && sp > 2.5 ? 0.46 : boost && sp < 22 && this.kind !== 'scooter' ? -0.42 : clamp(-a * 0.006, -0.08, 0.08);
+      this.pitch = damp(this.pitch, lean, 5, dt);
     } else {
       this.roll = damp(this.roll, clamp(-vs * 0.025 - this.yawRate * sp * 0.006, -0.12, 0.12), 6, dt);
       this.pitch = damp(this.pitch, clamp(-a * 0.004, -0.06, 0.06), 6, dt);
@@ -265,11 +335,13 @@ export class Vehicle {
   sync(braking = false) {
     const r = this.parts.root;
     r.position.copy(this.pos);
+    r.rotation.order = 'YXZ';
     r.rotation.y = this.heading;
-    // wheelie lifts the front around the rear axle
+    r.rotation.x = this.flip;
+    // wheelie lifts the front around the rear axle, stoppie the rear around the front
     const back = this.two ? this.parts.dims.wheelBase / 2 : 0;
     this.parts.body.rotation.set(this.pitch, 0, this.roll);
-    this.parts.body.position.set(0, this.two ? Math.sin(-Math.min(0, this.pitch)) * back : 0, 0);
+    this.parts.body.position.set(0, this.two ? Math.abs(Math.sin(this.pitch)) * back : 0, 0);
     const w = this.parts.wheels;
     for (let i = 0; i < w.length; i++) {
       const wheel = w[i];
@@ -277,7 +349,8 @@ export class Vehicle {
       wheel.rotation.z = this.two ? -this.roll : 0;
       wheel.children[0].rotation.x = this.wheelRot;
     }
-    if (this.two && w[0]) w[0].position.y = this.parts.dims.wheelR + this.parts.body.position.y * 2;
+    if (this.two && w[0]) w[0].position.y = this.parts.dims.wheelR + (this.pitch < 0 ? this.parts.body.position.y * 2 : 0);
+    if (this.two && w[1]) w[1].position.y = this.parts.dims.wheelR + (this.pitch > 0 ? this.parts.body.position.y * 2 : 0);
     const bm = this.parts.brake.material as THREE.MeshBasicMaterial;
     bm.color.set(braking ? '#ff3a2a' : this.driver === 'none' && !this.isCop ? '#5a1410' : '#b8231c');
     const alarmOn = this.alarmT > 0 && Math.sin(this.alarmT * 14) > 0;

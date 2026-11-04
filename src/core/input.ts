@@ -5,7 +5,7 @@
 
 export type Action =
   | 'moveForward' | 'moveBack' | 'moveLeft' | 'moveRight' | 'run' | 'jump'
-  | 'accelerate' | 'brake' | 'steerLeft' | 'steerRight' | 'handbrake' | 'boost' | 'carCamera'
+  | 'accelerate' | 'brake' | 'steerLeft' | 'steerRight' | 'handbrake' | 'boost' | 'carCamera' | 'trick'
   | 'interact' | 'hack' | 'hackPrimary' | 'hackAlt'
   | 'map' | 'phone' | 'abandon' | 'retry' | 'retryCheckpoint'
   | 'pause' | 'escape' | 'confirm' | 'back' | 'menuUp' | 'menuDown' | 'menuLeft' | 'menuRight'
@@ -27,6 +27,7 @@ const BINDINGS: Record<Action, { keys?: string[]; mouse?: number[] }> = {
   handbrake: { keys: ['Space'] },
   boost: { keys: ['ShiftLeft', 'ShiftRight'] },
   carCamera: { keys: ['KeyC'] },
+  trick: { keys: ['KeyF'] },
   interact: { keys: ['KeyE'] },
   hack: { keys: ['KeyQ', 'Tab'] },
   hackPrimary: { keys: ['KeyE'], mouse: [0] },

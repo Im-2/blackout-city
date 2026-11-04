@@ -91,6 +91,14 @@ src/
     types.ts              MissionDef, MissionStep, type colours + tags
     data.ts               the mission list
     missions.ts           runner: markers, intro card, steps, checkpoints, end screens, rewards
+  activities/
+    activities.ts         activity spots: map icons, first-visit intro cards
+    bikes.ts              bike parking + rental stands, streamed bikes
+    stunts.ts             ramps, Stunt Park, Long Jump, Shore Leap
+    tricks.ts             trick scoring, combo multiplier, HUD feed
+    races.ts              race defs (built into missions), rivals, position, prizes
+  reputation/reputation.ts rep per district + overall, tiers, shop + ped reactions
+  save/records.ts         local best trick scores + race times (written at once)
   save/save.ts            localStorage save: cash, stash, outfits, upgrades, escapes, missions, rep, vehicles
   map/
     districts.ts          the 6 districts: tint, styles, traffic + crowd mix, block table
@@ -157,6 +165,15 @@ assets/                   reference art (not shipped) + optional models/
 - **Other home interactions:** bed, wardrobe (outfit list), hacker desk (tabs: missions + GPS, map, collection, reputation, upgrades), stash safe (stash loot, or take it back out to sell), trophy shelf (cups per mission, stash goods, cash bricks from `save.earned`), coffee machine (fills hack energy). `home.refreshDisplays()` rebuilds the shelves. The TV draws `news.ticker` to a canvas at 12 Hz and the big monitor shows a live police map at 2.5 Hz, both only while you're in the flat.
 - **Map icons:** green house = home (minimap: always pinned; full map: tooltip), green `G` = your garage, gold `TAXI` includes a Home stand beside the front door. New `GameState` `menu` freezes the world behind the home screens. `fadeTeleport` takes an optional callback at the black point, and `g.fading` freezes the player on foot.
 - **Camera:** the shoulder offset is clamped by a raycast (it could start behind a wall), the camera pulls in to 2.7 m in the flat, the on-foot minimum distance dropped from 0.6 m to 0.1 m (0.6 could land it behind the wall you're backed against), in the home it's pushed off walls by a 0.2 m circle, and the player model hides when the camera is within 0.55 m. Shadows don't refresh while you're in the flat. Vaulting now needs a clear line at head height, so it can't carry you through a wall.
+
+- **Part 2, activities:** every spot goes through `g.activities.add()` (name, type, map icon, intro) and gets its first-visit card automatically (`save.seen`). New map types in `TYPE_INFO`: `stunt`, `bike`. Races are missions (`RACE_MISSIONS`), so markers, cards, beams, GPS, fail and retry come from the mission runner.
+- **Bikes:** bicycle and motorbike were already rideable. Bike parking (free bicycles) and rental stands (motorbike $40, scooter $20, bicycle $8; `Vehicle.rental`; broke = hold E to pick the lock) are placed on clear pavement by `Bikes.findSpot`, stream like parked cars and restock once you're 70 m away.
+- **Airtime:** `Vehicle` now has real vertical motion: `air`, `vy`, gravity 20. When the ground drops > 0.3 m it launches with the climb rate it had. In the air, two-wheelers spin with steer and flip with `trick` + throttle (flips need the key because everyone holds the gas off a ramp). `landed` is consumed by `tricks.ts`; a crooked landing (> 60°) throws you off. Air applies to every vehicle, including cars off deck edges.
+- **Tricks:** `trick` action = F. Hold F = wheelie, F + S = stoppie, Shift's boost wheelie on motorbikes also scores. Each trick adds to a combo, +1 multiplier (max ×8), 2.6 s to chain, banked as score × mult = cash (score / 25) + rep. Best five in `Records`, shown on the Stunt Park scoreboard (E) and the desk's RECORDS tab. Records save immediately and survive New Game: they're an arcade table, not progress.
+- **Ramps:** `Stunts.ramp()` = a `surfaces` slope + 0.6 m collider slices just under it. Ramps must line up with a run-up: `RUNWAYS` park blocks have no fountain, no planters, and a surface on their grass. A flat top after a ramp kills the launch (climb rate decays), so don't add one.
+- **Races:** `RACES` in `activities/races.ts`: class, corners on the road graph, laps. Three rivals in the same vehicle start ahead of you. Corner speeds come from what the car can actually steer (`steerRate / (1 + v/45)`), with a backward pass for braking. Rubber band: over 30 m from you, at most -12 % / +8 %, off in the last 20 %. Rivals never wreck (hp floor 25) and rejoin the line only if badly stuck out of sight. Finish top three for 100 / 40 / 15 % of the prize; last place fails. Polylines must not hold repeated points: they read as a hairpin and the corner limit crawls.
+- **Reputation:** `g.rep.add(district, n)` from missions, crimes (`news.report`), tricks. Tiers NOBODY 0, SMALL-TIME 10, KNOWN 50, WANTED NAME 150, CITY LEGEND 400. `tierHere` = local rep + 25 % of overall. Clerks and the fence greet you by tier; from KNOWN the Mart clerk stops calling 911; fence pays +2 % per tier, clothes -5 % per tier. Walkers recognise you (speech bubble, stop and film, or run if you have heat; a changed outfit makes it rarer). `news.ts`: ticker on billboards + TV carries headlines and your record; the radio scanner reads your outfit and record every 70 s. Crime counts live in `save.crimes`.
+- **Keys:** F trick. Clip: `;` = +25 rep.
 
 ## Testing notes
 - Plain screenshots of the preview pane can return a stale image; `zoom` over the full region captures a fresh frame.

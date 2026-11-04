@@ -10,7 +10,7 @@ import { worldMat } from '../render/patch';
 import type { FacadeStyle } from '../assets/textures';
 import {
   BLOCKS, PITCH, ROAD_HALF, SIDEWALK, CURB_H, HALF, PARK_LANE,
-  roadCoord, blockBounds, blockCenter, RoadGraph, BANK_BLOCK, DROP_BLOCK, RING, OVERPASS, SHORE, surfaces,
+  roadCoord, blockBounds, blockCenter, RoadGraph, RUNWAYS, BANK_BLOCK, DROP_BLOCK, RING, OVERPASS, SHORE, surfaces,
 } from './layout';
 import { DISTRICTS, District, districtOfBlock } from '../map/districts';
 
@@ -308,7 +308,7 @@ export class City {
       this.buildGarage(lot, bucket);
     } else {
       const roll = r.next();
-      if (district === 'park') this.buildPark(lot, bj >= 10);
+      if (district === 'park') this.buildPark(lot, bj >= 10, RUNWAYS.some(([i, j]) => i === bi && j === bj));
       else if (district === 'docks') this.buildDocksLot(lot, bucket, bi);
       else if (district === 'downtown' && roll < 0.55) this.buildTowerLot(lot, bucket);
       else if (district === 'residential' && roll < 0.08) this.buildPark(lot, false);
@@ -456,7 +456,7 @@ export class City {
       }
   }
 
-  private buildPark(lot: { x0: number; z0: number; x1: number; z1: number }, waterfront: boolean) {
+  private buildPark(lot: { x0: number; z0: number; x1: number; z1: number }, waterfront: boolean, runway = false) {
     const g = this.props;
     const top = CURB_H + 0.25;
     g.box(lot.x0 + 1, CURB_H, lot.z0 + 1, lot.x1 - 1, top, lot.z1 - 1, { color: waterfront ? '#566a38' : '#4f6332' });
@@ -468,6 +468,11 @@ export class City {
     for (let i = 0; i < 7; i++) {
       const sx = this.rng.chance(0.5) ? 1 : -1, sz = this.rng.chance(0.5) ? 1 : -1;
       this.tree(cx + sx * this.rng.range(4, 14), cz + sz * this.rng.range(4, 14), top, this.rng.range(1.1, 1.6));
+    }
+    if (runway) {
+      // nothing on the paths, and they're ridden on top of the grass
+      surfaces.push({ x0: lot.x0 + 1, z0: lot.z0 + 1, x1: lot.x1 - 1, z1: lot.z1 - 1, h0: top + 0.01 });
+      return;
     }
     g.cbox(cx, CURB_H + 0.5, cz, 3, 0.5, 3, { color: '#8a857c', shadeSides: true });
     g.cbox(cx, CURB_H + 1.4, cz, 0.8, 1.4, 0.8, { color: '#7a766d' });
@@ -807,9 +812,10 @@ export class City {
         const L = b.x1 - b.x0;
         this.useBlock(bj * BLOCKS + bi);
         for (const t of [0.5]) {
-          if (this.rng.chance(0.75)) this.planter(b.x0 + L * t, b.z1 - 1.3);
-          if (this.rng.chance(0.6)) this.planter(b.x0 + L * t, b.z0 + 1.3);
-          if (this.rng.chance(0.5)) this.planter(b.x1 - 1.3, b.z0 + L * t);
+          const clear = RUNWAYS.some(([i, j]) => i === bi && j === bj); // nothing in the way of a run-up
+          if (this.rng.chance(0.75) && !clear) this.planter(b.x0 + L * t, b.z1 - 1.3);
+          if (this.rng.chance(0.6) && !clear) this.planter(b.x0 + L * t, b.z0 + 1.3);
+          if (this.rng.chance(0.5) && !clear) this.planter(b.x1 - 1.3, b.z0 + L * t);
         }
       }
     // Instanced tree: trunk + stacked foliage cubes

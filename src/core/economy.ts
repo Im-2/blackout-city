@@ -39,12 +39,12 @@ export class Loot {
     const v = this.carriedValue;
     if (!v) return;
     // the fence takes a cut, more if you're hot
-    const cut = this.g.police.heat > 0 ? 0.6 : 0.8;
+    const cut = (this.g.police.heat > 0 ? 0.6 : 0.8) + this.g.rep.fenceBonus;
     const paid = Math.round(v * cut);
     this.addCash(paid);
     this.carried = [];
     this.g.audio.cash();
-    this.g.hud.toast(`FENCE PAID $${paid.toLocaleString()}${this.g.police.heat > 0 ? ' (HOT GOODS -40%)' : ' (-20% CUT)'}`, 'win');
+    this.g.hud.toast(`FENCE PAID $${paid.toLocaleString()}${this.g.police.heat > 0 ? ' (HOT GOODS)' : ''}`, 'win');
   }
 
   stashAll() {
@@ -85,7 +85,7 @@ export class Shop {
     const g = this.g;
     const next = OUTFITS.find((o) => !g.disguise.owned.has(o.id));
     if (!next) { this.cycleOutfit(); return; }
-    if (!this.pay(next.price)) return;
+    if (!this.pay(Math.round(next.price * g.rep.priceScale))) return;
     g.disguise.owned.add(next.id);
     g.save.data.outfits = [...g.disguise.owned];
     g.disguise.wear(next.id);

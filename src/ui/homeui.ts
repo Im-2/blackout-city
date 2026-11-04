@@ -4,22 +4,20 @@ import { TYPE_INFO } from '../missions/types';
 import { DISTRICTS, District } from '../map/districts';
 import { OUTFITS } from '../player/disguise';
 import { UPGRADES } from '../core/economy';
+import { Races } from '../activities/races';
+import { repTitle } from '../reputation/reputation';
 import type { Game } from '../core/game';
 
-export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies';
+export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies' | 'records';
 
 interface Row { left: string; right?: string; sub?: string; color?: string; act?: () => void; bar?: number; }
 
 const TAB_NAMES: Record<HomeTab, string> = {
   missions: 'MISSIONS', map: 'MAP', collection: 'COLLECTION', rep: 'REPUTATION', upgrades: 'UPGRADES',
-  wardrobe: 'OUTFITS', stash: 'STASH', trophies: 'TROPHIES',
+  wardrobe: 'OUTFITS', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS',
 };
 
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-
-function repTitle(n: number) {
-  return n >= 400 ? 'CITY LEGEND' : n >= 150 ? 'WANTED NAME' : n >= 50 ? 'KNOWN' : n >= 10 ? 'SMALL-TIME' : 'NOBODY';
-}
 
 export class HomeUi {
   private el: HTMLDivElement;
@@ -135,6 +133,12 @@ export class HomeUi {
         const rows: Row[] = s.stash.map((i) => ({ left: i.name, right: `$${i.value.toLocaleString()}` }));
         if (!rows.length) return [{ left: 'Empty', sub: 'Carried loot is lost if you get busted. Goods in here are safe.' }];
         return [{ left: `Take it all to sell ($${total.toLocaleString()})`, sub: 'The fence is at Pawn & Loan. You lose it if you get busted on the way.', color: '#ffd24a', act: () => { g.loot.carried.push(...s.stash); s.stash = []; g.home.refreshDisplays(); g.hud.toast('STASH EMPTIED — GOODS IN YOUR BAG', 'cool'); this.close(); } }, ...rows];
+      }
+      case 'records': {
+        const r = g.records;
+        const tricks: Row[] = r.tricks.length ? r.tricks.map((e, i) => ({ left: `#${i + 1} ${e.bike}`, right: e.score.toLocaleString(), color: '#b6ff3a' })) : [{ left: 'No trick scores yet', sub: 'Do a wheelie on any bike, then land something at Stunt Park.', color: '#b6ff3a' }];
+        const races: Row[] = Races.titles().map(([id, title]) => ({ left: title, right: r.races[id] !== undefined ? fmtTime(r.races[id]) : 'NOT RACED', color: '#ff5ad8' }));
+        return [...tricks, ...races];
       }
       case 'trophies': {
         const cups = g.missions.defs.filter((d) => s.completed[d.id]).map((d) => ({ left: d.title, right: `×${s.completed[d.id].n} · BEST ${fmtTime(s.completed[d.id].best)}`, color: TYPE_INFO[d.type].color }));

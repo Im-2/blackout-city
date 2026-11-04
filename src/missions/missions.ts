@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { basicMat } from '../render/patch';
 import { Vehicle } from '../vehicles/vehicle';
 import { MISSIONS } from './data';
+import { RACE_MISSIONS } from '../activities/races';
 import { MissionCtx, MissionDef, MissionStep, TYPE_INFO } from './types';
 import { DISTRICTS } from '../map/districts';
 import type { Game } from '../core/game';
@@ -44,7 +45,7 @@ function makeBeam(scene: THREE.Scene, r: number, h: number): Beam {
 }
 
 export class Missions {
-  defs = MISSIONS;
+  defs = [...MISSIONS, ...RACE_MISSIONS];
   run: Run | null = null;
   /** mission waiting on the intro card */
   card: MissionDef | null = null;
@@ -190,8 +191,7 @@ export class Missions {
     s.completed[def.id] = { n: (prev?.n ?? 0) + 1, best };
     s.cash += cash;
     s.earned += cash;
-    s.rep.overall += def.reward.reputation;
-    s.rep.districts[def.district] = (s.rep.districts[def.district] ?? 0) + def.reward.reputation;
+    g.rep.add(def.district, def.reward.reputation);
     const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     this.ended = {
       kind: 'success', def,

@@ -206,6 +206,8 @@ export function lanePoint(ax: number, az: number, bx: number, bz: number, t: num
 }
 
 // Key locations
+/** park blocks kept clear down the middle: the run-ups for the stunt ramps */
+export const RUNWAYS = [[3, 10], [5, 10], [7, 10]];
 export const BANK_BLOCK: [number, number] = [4, 5];
 export const DROP_BLOCK: [number, number] = [8, 8];
 /** waterline on the south and east sides of the map */
