@@ -51,6 +51,7 @@ import { Tricks } from '../activities/tricks';
 import { Races } from '../activities/races';
 import { Reputation } from '../reputation/reputation';
 import { Records } from '../save/records';
+import { Places } from '../map/places';
 import { Home } from '../world/home';
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'results' | 'map' | 'menu';
@@ -111,6 +112,7 @@ export class Game {
   races!: Races;
   rep!: Reputation;
   records = new Records();
+  places = new Places(this);
   homeUi!: HomeUi;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;

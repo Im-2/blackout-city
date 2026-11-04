@@ -68,6 +68,7 @@ export class Input {
 
   constructor(private canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (e) => {
+      if (e.target instanceof HTMLInputElement) return; // typing in a text box isn't playing
       // Keep the browser from scrolling / tabbing / opening devtools-adjacent shortcuts while playing.
       if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'F2'].includes(e.code)) e.preventDefault();
       if (!this.down.has(e.code)) this.pressedSet.add(e.code);

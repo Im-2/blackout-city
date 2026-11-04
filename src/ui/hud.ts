@@ -6,6 +6,8 @@ import { DISTRICTS, districtOfBlock } from '../map/districts';
 import { TYPE_INFO, MissionDef } from '../missions/types';
 import type { Missions } from '../missions/missions';
 import { repTitle } from '../reputation/reputation';
+import { drawIcon, ICON_R } from './mapicons';
+import { PRIO, Place } from '../map/places';
 import type { Game } from '../core/game';
 
 const h = (tag: string, cls = '', html = '') => {
@@ -31,22 +33,6 @@ const CONTROLS = `
   <div><b>Hold F</b> on a bike: wheelie · <b>F+S</b> stoppie</div><div><b>In the air</b> A/D spin · <b>F+W/S</b> flip</div>
 </div>
 <div class="ctl-sub">CLIP TOOLS: <b>0-5</b> set heat · <b>T</b> bank · <b>Y</b> drop · <b>U</b> mid-city · <b>G</b> spawn getaway car · <b>L</b> start heist's escape · <b>\`</b> unlock all · <b>B</b> bicycle · <b>N</b> motorbike · <b>V</b> next vehicle · <b>K</b> crowd · <b>;</b> +25 rep · <b>[ ]</b> teleport to sites · <b>O</b> +3 hours · <b>I</b> rain · <b>F3</b> debug · <b>F4</b> quality · <code>?clip</code> URL = instant chase</div>`;
-
-/** the HOME icon, on the minimap and the full map */
-export function houseIcon(c: CanvasRenderingContext2D, x: number, y: number, s: number) {
-  c.fillStyle = '#0f141c';
-  c.fillRect(x - 11 * s, y - 11 * s, 22 * s, 22 * s);
-  c.fillStyle = '#7dffb0';
-  c.beginPath();
-  c.moveTo(x, y - 10 * s);
-  c.lineTo(x + 10 * s, y);
-  c.lineTo(x - 10 * s, y);
-  c.closePath();
-  c.fill();
-  c.fillRect(x - 7 * s, y, 14 * s, 9 * s);
-  c.fillStyle = '#0f141c';
-  c.fillRect(x - 2 * s, y + 3 * s, 4 * s, 6 * s);
-}
 
 function p2stale(g: Game) {
   const v = g.player.vehicle;
@@ -88,6 +74,8 @@ export class Hud {
   private vehEl: HTMLDivElement;
   private lastHtml: Record<string, string> = {};
   private miniT = 0;
+  private miniListT = 0;
+  private miniList: Place[] = [];
   private objLabel: HTMLDivElement;
   private timerEl: HTMLDivElement;
   private cardEl: HTMLDivElement;
@@ -537,18 +525,17 @@ export class Hud {
       c.arc((b.x - P.x) * S, (b.z - P.z) * S, b.r * S, 0, Math.PI * 2);
       c.fill();
     }
-    // drop + bank markers
-    const dz = g.city.dropZone;
-    c.fillStyle = '#ffb000';
-    c.fillRect((dz.x - P.x) * S - 8, (dz.z - P.z) * S - 8, 16, 16);
-    c.fillStyle = '#9fb06a';
-    c.fillRect((-84 - P.x) * S - 7, (-27 - P.z) * S - 7, 14, 14);
     // cops
     const blink = Math.sin(this.t * 12) > 0;
-    for (const u of g.police.units) {
-      c.fillStyle = blink ? '#e0322a' : '#2b5ce0';
-      c.fillRect((u.pos.x - P.x) * S - 5, (u.pos.z - P.z) * S - 5, 10, 10);
-    }
+    const upright = (x: number, z: number, draw: () => void) => {
+      c.save();
+      c.translate(x, z);
+      c.rotate(-(Math.PI + yaw));
+      c.scale(1 / zoom, 1 / zoom);
+      draw();
+      c.restore();
+    };
+    for (const u of g.police.units) upright((u.pos.x - P.x) * S, (u.pos.z - P.z) * S, () => drawIcon(c, 'police', 0, 0, 1, blink ? '#e0322a' : '#2b5ce0'));
     for (const o of g.police.officers) {
       c.fillStyle = '#7aa0ff';
       c.fillRect((o.pos.x - P.x) * S - 3, (o.pos.z - P.z) * S - 3, 6, 6);
@@ -576,58 +563,27 @@ export class Hud {
       if (L > max) { dx *= max / L; dz *= max / L; }
       return [dx, dz];
     };
-    // mission markers, coloured by type (grey = locked; hidden while on a mission)
-    if (!g.missions.run) {
-      for (const d of g.missions.defs) {
-        const st = g.missions.status(d);
-        if (st === 'done') continue;
-        const [mx, mz] = pin(d.marker.x, d.marker.z);
-        c.save();
-        c.translate(mx, mz);
-        c.rotate(-(Math.PI + yaw)); // keep icons upright
-        c.scale(1 / zoom, 1 / zoom);
-        c.fillStyle = '#0f141c';
-        c.fillRect(-9, -9, 18, 18);
-        c.fillStyle = st === 'locked' ? '#6a6f78' : TYPE_INFO[d.type].color;
-        c.fillRect(-7, -7, 14, 14);
-        c.fillStyle = '#0a1218';
-        c.font = '14px VT323, monospace';
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillText(TYPE_INFO[d.type].tag, 0, 1);
-        c.restore();
-      }
+    // places: same icons as the full map. Most important first; whatever would land on
+    // top of something already drawn is skipped, and minor ones only show when close.
+    this.miniListT -= 1 / 15;
+    if (this.miniListT <= 0) { this.miniListT = 1; this.miniList = g.places.list().sort((p, q) => q.prio - p.prio); }
+    const taken: [number, number, number][] = [];
+    const toDraw: [number, number, () => void][] = [];
+    const mapR = 88 / zoom;
+    for (const p of this.miniList) {
+      if (p.missionMarker && (g.missions.run || (p.done && !p.pin))) continue;
+      const far = Math.hypot(p.x - P.x, p.z - P.z) * S > mapR;
+      if (far && !p.pin) continue;
+      const [ix, iz] = pin(p.x, p.z);
+      const scale = p.prio >= PRIO.home ? 0.72 : p.prio >= PRIO.activity ? 0.66 : 0.8;
+      const r = ICON_R[p.icon] * scale + 2;
+      // compare in minimap pixels: the map is scaled by zoom here
+      const px = ix * zoom, pz = iz * zoom;
+      if (taken.some(([tx, tz, tr]) => Math.hypot(tx - px, tz - pz) < tr + r)) continue;
+      taken.push([px, pz, r]);
+      toDraw.push([ix, iz, () => drawIcon(c, p.icon, 0, 0, scale, p.color, p.tag)]);
     }
-    // home, always pinned on the map
-    const [hx, hz] = pin(-28, 46);
-    c.save();
-    c.translate(hx, hz);
-    c.rotate(-(Math.PI + yaw));
-    c.scale(1 / zoom, 1 / zoom);
-    houseIcon(c, 0, 0, 0.8);
-    c.restore();
-    // activity spots: pinned ones stay on the edge, the rest show when they're close
-    if (!g.missions.run) {
-      for (const s of g.activities.spots) {
-        const far = Math.hypot(s.x - P.x, s.z - P.z) * S > 88 / zoom;
-        if (far && !s.pin) continue;
-        const [ax, az] = pin(s.x, s.z);
-        c.save();
-        c.translate(ax, az);
-        c.rotate(-(Math.PI + yaw));
-        c.scale(1 / zoom, 1 / zoom);
-        c.fillStyle = '#0f141c';
-        c.fillRect(-8, -8, 16, 16);
-        c.fillStyle = g.activities.iconColor(s);
-        c.fillRect(-6, -6, 12, 12);
-        c.fillStyle = '#0a1218';
-        c.font = '13px VT323, monospace';
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillText(g.activities.iconTag(s), 0, 1);
-        c.restore();
-      }
-    }
+    for (let i = toDraw.length - 1; i >= 0; i--) upright(toDraw[i][0], toDraw[i][1], toDraw[i][2]);
     // rivals during a race
     c.fillStyle = '#ff5ad8';
     for (const p of g.races.blips()) c.fillRect((p.x - P.x) * S - 5, (p.z - P.z) * S - 5, 10, 10);

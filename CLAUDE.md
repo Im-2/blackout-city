@@ -106,7 +106,9 @@ src/
     fasttravel.ts         taxi stands + menu
     gps.ts                waypoint, road-graph route, chevrons on the road
   ui/hud.ts               HUD, minimap, toasts, screens, phone, escape list, mission card + end screens
-  ui/fullmap.ts           full map (M): pan, zoom, markers, places, police, waypoint
+  map/places.ts           every place on the map in one list: icon, colour, priority, status
+  ui/mapicons.ts          the icon shapes, shared by full map, location list, minimap
+  ui/fullmap.ts           full map (M): decluttered markers + LOCATIONS panel, waypoint
   ui/homeui.ts            home screens: hacker desk tabs, wardrobe, stash, trophies
   ui/news.ts              radio lines + billboard ticker
   audio/audio.ts          WebAudio synth (engine, siren, hacks, ambience)
@@ -174,6 +176,10 @@ assets/                   reference art (not shipped) + optional models/
 - **Races:** `RACES` in `activities/races.ts`: class, corners on the road graph, laps. Three rivals in the same vehicle start ahead of you. Corner speeds come from what the car can actually steer (`steerRate / (1 + v/45)`), with a backward pass for braking. Rubber band: over 30 m from you, at most -12 % / +8 %, off in the last 20 %. Rivals never wreck (hp floor 25) and rejoin the line only if badly stuck out of sight. Finish top three for 100 / 40 / 15 % of the prize; last place fails. Polylines must not hold repeated points: they read as a hairpin and the corner limit crawls.
 - **Reputation:** `g.rep.add(district, n)` from missions, crimes (`news.report`), tricks. Tiers NOBODY 0, SMALL-TIME 10, KNOWN 50, WANTED NAME 150, CITY LEGEND 400. `tierHere` = local rep + 25 % of overall. Clerks and the fence greet you by tier; from KNOWN the Mart clerk stops calling 911; fence pays +2 % per tier, clothes -5 % per tier. Walkers recognise you (speech bubble, stop and film, or run if you have heat; a changed outfit makes it rarer). `news.ts`: ticker on billboards + TV carries headlines and your record; the radio scanner reads your outfit and record every 70 s. Crime counts live in `save.crimes`.
 - **Keys:** F trick. Clip: `;` = +25 rep.
+- **Map:** add a place in `map/places.ts` (or via `g.activities.add`, or as a mission) and it appears on the full map, list and minimap. Priority (`PRIO`): active mission 100, mission 90, race 85, home 80, key places 70, stunts 60, shops 50, garages 40, taxi/bike/metro/closed 30. Shapes (`mapicons.ts`): mission = diamond with type colour + letter, race = pink chequered flag, home = green house, bank = gold temple, police = blue shield, tower = pale bar, stunt = lime wedge, shop = circle with S, fence = ringed coin, garage = square with P/G/D, taxi = small yellow bar, metro = small blue triangle, bike rack = violet ring, rental = ring with gold centre, patrol car = small red/blue bar (the "two red squares" were these, unlabelled), group = grey circle with a count.
+- **Map declutter (`FullMap.buildLayout`, runs each draw):** places at shop priority or below merge when within 25 px into a count badge; click or zoom to split. Everything then places in priority order: a marker that would touch one already placed (or the player arrow) moves to the nearest free spot, with a thin leader line and a dot at its true position. Icon scale grows 0.85 to 1.3 with zoom. District names are drawn faint behind markers. The tooltip picks whichever side covers the fewest markers. `g.map.layout` is public so tests can check overlaps.
+- **LOCATIONS panel:** beside the map, and the map's width shrinks to fit. Tabs ALL / MISSIONS / RACES / ACTIVITIES / SHOPS / SERVICES (←→), search, sort near/type, ↑↓ moves the selection, Enter or double-click toggles GPS, click flies the map there. Bank and police station count as SERVICES. A mission's waypoint still loses to the mission target (`g.missionTarget`). `Input` ignores keys typed into text boxes.
+- **Minimap:** same icons and priority. Places draw most important first; anything landing on one already drawn is skipped, minor ones only show in range, only missions, races, home and Stunt Park pin to the edge. No labels.
 
 ## Testing notes
 - Plain screenshots of the preview pane can return a stale image; `zoom` over the full region captures a fresh frame.
