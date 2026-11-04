@@ -16,10 +16,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet" />
+    <!-- shown instantly, while the game code downloads on a slow connection -->
+    <style>#boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0f141c;color:#e8e2d0;font:bold 30px monospace;letter-spacing:5px;text-align:center}#boot i{display:block;width:180px;height:8px;background:#46e6ff;animation:b 1s steps(2) infinite}#boot small{font-size:13px;letter-spacing:2px;color:#8a8f98}@keyframes b{50%{opacity:.3}}</style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="ui"></div>
+    <div id="boot">BLACKOUT CITY<i></i><small>LOADING</small></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

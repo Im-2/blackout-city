@@ -4,11 +4,18 @@ Browser 3D open-city heist game. Tagline: **"Cut the power. Rob the city."**
 Vite + TypeScript + Three.js. Game-jam entry judged on gameplay footage, so a
 tight, great-feeling, good-looking slice beats a big empty map.
 
+## Live
+- Game: https://blackout-city-five.vercel.app
+- Repo: https://github.com/Im-2/blackout-city (public, branch `master`)
+
 ## Commands
 - `npm run dev` — dev server on http://localhost:5173
 - `npm run build` — typecheck (`tsc --noEmit`) + static build into `dist/`
 - `npm run preview` — serve the build
-- Deploy: Vercel static build (`vercel.json`: build `npm run build`, output `dist`).
+- Deploy: push to `master`. The GitHub repo is connected to Vercel, so each push builds and goes to production. By hand: `vercel --prod`.
+- Vercel settings: build `npm run build`, output `dist` (`vercel.json`), production branch `master` (it defaulted to `main`, which doesn't exist here). `blackout-city.vercel.app` belongs to someone else: use the address above. Deployment URLs with a hash need a Vercel login; the address above is public. `.vercelignore` keeps the reference PNGs out of CLI uploads.
+- Before publishing anything: this repo is public. Never commit `.env*`, keys or personal details. The Vercel CLI writes a token to `.env.local`, which `.gitignore` covers.
+- Pushing the first time timed out on this connection and still landed. If a push reports an error, check `git ls-remote origin` before retrying.
 
 ## Rules
 - All visuals follow **ART_BIBLE.md**. Colours come from `src/core/palette.ts`; never inline a new hex for a world material without adding it there first (props/characters may use art-bible hexes directly).
@@ -130,7 +137,7 @@ assets/                   reference art (not shipped) + optional models/
 - **Busted:** a cop on foot within ~1.6 m of you for a cumulative 3 s, or your car is stopped & boxed in by cops for 3 s, or the getaway car is wrecked during the escape.
 - **Route memory persists** in `localStorage` across runs (with decay), so the police "learn" favourite escape routes between attempts. Shown via HUD hints + minimap highlights.
 - **Bank alarm:** cameras/guards spotting you in the restricted zone fill a suspicion meter; full = alarm (heat 2). Grabbing the loot always trips the alarm.
-- GLB models are looked up at `/assets/models/*.glb` (dev serves the folder; the build copies it into `dist`).
+- GLB models are read from `/assets/models/*.glb`. `vite.config.ts` lists what's there into `__GLB_MODELS__` when the server or build starts, so nothing is requested unless it exists (asking for a missing file is a 404 in production). Restart the dev server after adding one.
 
 ## Expansion pass 2 ("make the city alive")
 - **Phase 0:** heat-4 roadblocks fire 2.5 s after reaching heat 4 (40–120 m ahead, prefers learned routes, fallback cone); reaching heat 5 force-spawns a SWAT van (bypasses the unit cap) and the helicopter arrives from 60 m. `core/quality.ts`: 4 presets (LOW→ULTRA) scale traffic, crowd size, full-detail rigs, shadow map, pixel ratio; auto-downgrades when the frame-time EMA exceeds the 60 fps budget for 2.5 s, re-upgrades after 15 s of headroom. F3 = debug overlay (fps, draw calls, agent counts), F4 = cycle quality.

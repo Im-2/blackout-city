@@ -4,9 +4,9 @@
 
 A low-poly open-city heist game that runs in the browser. You play a tired office clerk with a hacking rig: kill the lights on a block, turn the traffic signals against the police, crack the vault, and get away with the money. The city remembers how you did it.
 
-**Play it:** LIVE_LINK
+**Play it:** https://blackout-city-five.vercel.app
 
-**Source:** REPO_LINK
+**Source:** https://github.com/Im-2/blackout-city
 
 ## Features
 

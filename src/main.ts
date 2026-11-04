@@ -3,6 +3,7 @@ import { Game } from './core/game';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const game = new Game(canvas);
+document.getElementById('boot')?.remove(); // the code has arrived: the game's own loading bar takes over
 game.init().catch((e) => {
   console.error(e);
   const ui = document.getElementById('ui')!;
