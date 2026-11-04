@@ -422,3 +422,13 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
 .mg-info { display: flex; justify-content: space-between; font-size: 22px; color: #5aff8a; letter-spacing: 3px; }
 .mg-info em { font-style: normal; color: #fff1d0; letter-spacing: 0; }
 @media (max-height: 520px) { .mg { top: 26%; padding: 4px 8px; } .mg-bar { height: 20px; margin: 3px 0; } .mg-info { font-size: 16px; } }
+
+.tail-hud { top: 18px; left: 50%; transform: translateX(-50%); width: min(280px, 38vw); padding: 4px 10px 6px; text-align: center; border-top: 4px solid #9fe8ff; }
+.t-band { position: relative; height: 12px; margin: 3px 0; background: #3a1c1c; border: 1px solid var(--line); }
+.t-band i { position: absolute; top: 0; bottom: 0; background: #2f6a4a; }
+.t-band b { position: absolute; top: -3px; bottom: -3px; width: 4px; margin-left: -2px; background: #fff1d0; }
+.t-state { font-size: 19px; color: #7dffb0; }
+.t-state.bad { color: #ff5a4a; animation: blink 0.5s steps(2) infinite; }
+.t-seen { height: 6px; margin-top: 2px; background: #0b1016; border: 1px solid #22303d; }
+.t-seen i { display: block; height: 100%; background: #ff5a4a; }
+@media (max-height: 520px) { .tail-hud { top: 48px; padding: 1px 8px 3px; } .t-state { font-size: 14px; } .t-band { height: 8px; } }

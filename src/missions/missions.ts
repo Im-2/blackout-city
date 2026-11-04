@@ -7,6 +7,8 @@ import { MISSIONS } from './data';
 import { device } from '../core/device';
 import { RACE_MISSIONS } from '../activities/races';
 import { TRUCK_MISSION } from '../activities/truck';
+import { GETAWAY_MISSIONS } from '../activities/getaway';
+import { TAIL_MISSIONS } from '../activities/tail';
 import { MissionCtx, MissionDef, MissionStep, TYPE_INFO } from './types';
 import { DISTRICTS } from '../map/districts';
 import type { Game } from '../core/game';
@@ -47,7 +49,7 @@ function makeBeam(scene: THREE.Scene, r: number, h: number): Beam {
 }
 
 export class Missions {
-  defs = [...MISSIONS, TRUCK_MISSION, ...RACE_MISSIONS];
+  defs = [...MISSIONS, TRUCK_MISSION, ...GETAWAY_MISSIONS, ...TAIL_MISSIONS, ...RACE_MISSIONS];
   run: Run | null = null;
   /** mission waiting on the intro card */
   card: MissionDef | null = null;

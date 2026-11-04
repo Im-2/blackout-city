@@ -31,7 +31,7 @@ interface JobDef {
 
 const JOBS: JobDef[] = [
   { id: 'getaway_gems', title: 'Diamond Dash', giver: 'Sal\'s crew', district: 'oldtown', marker: { x: -47, z: 9 }, door: { x: -28, z: 10 }, drop: { x: 112, z: 130 }, pay: 2500, par: 34, place: 'Gems & Co', intro: 'Sal\'s crew are hitting Gems & Co. Wait at the kerb with the engine running, then get them to the docks yard. You get paid for speed, a clean car and a quick escape.' },
-  { id: 'getaway_docks', title: 'Payroll Run', giver: 'Harbour crew', district: 'docks', marker: { x: 210, z: 65 }, door: { x: 214, z: 64 }, drop: { x: -112, z: -168 }, pay: 3500, par: 48, place: 'the payroll office', intro: 'It\'s pay day at the docks. The crew walk in, you bring them out across the whole city. Long drive, plenty of time to pick up a tail.' },
+  { id: 'getaway_docks', title: 'Payroll Run', giver: 'Harbour crew', district: 'docks', marker: { x: 210, z: 65 }, door: { x: 214, z: 66.6 }, drop: { x: -112, z: -168 }, pay: 3500, par: 48, place: 'the payroll office', intro: 'It\'s pay day at the docks. The crew walk in, you bring them out across the whole city. Long drive, plenty of time to pick up a tail.' },
   { id: 'getaway_tower', title: 'The Vantage Job', giver: 'A nervous banker', district: 'downtown', marker: { x: 12, z: 9 }, door: { x: 28, z: 13.5 }, drop: { x: -280, z: 168 }, pay: 6000, par: 52, place: 'Vantage Tower', intro: 'The lead you got from tailing the courier: a safe deposit run at Vantage Tower. The biggest job in town, in the busiest part of it.', unlock: { missions: ['tail_courier'], hint: 'You need a lead: tail the courier in Old Town' } },
 ];
 
@@ -101,7 +101,7 @@ export class GetawayJob {
     c.spawnVehicle('sedan', bx, bz, k.heading, '#4a4c52').locked = false;
     this.crew = [0, 1].map((i) => {
       const rig = new RigCharacter({ ...makePedSkin('local', this.rng), top: i ? '#23283a' : '#2c2e3c', pants: '#1e1e20', key: `crew${i}` });
-      const pos = new THREE.Vector3(d.door.x + (i ? 2.4 : -2.4), 0.15, d.door.z - Math.sign(d.door.z - k.z) * -1.6);
+      const pos = new THREE.Vector3(d.door.x + (i ? 2.4 : -2.4), 0.15, d.door.z + Math.sign(k.z - d.door.z) * 1.4);
       rig.root.position.copy(pos);
       g.scene.add(rig.root);
       return { rig, state: 'waiting' as CrewState, seat: (i ? [-0.42, -0.2] : [0.42, -1.05]) as [number, number], pos, cheer: 0, car: null };

@@ -315,7 +315,7 @@ export class Hud {
     const v = p.vehicle;
     this.objLabel.textContent = g.missions.panelTitle;
     this.objective.textContent = g.missions.objective;
-    this.objSub.textContent = g.missions.sub;
+    this.objSub.textContent = touchText(g.missions.sub);
     const tl = g.missions.timeLeft;
     const tgt = g.missions.run ? g.missions.target() : null;
     const dist = tgt ? Math.hypot(tgt.x - g.player.worldPos.x, tgt.z - g.player.worldPos.z) : 0;
