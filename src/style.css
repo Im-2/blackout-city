@@ -432,3 +432,9 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
 .t-seen { height: 6px; margin-top: 2px; background: #0b1016; border: 1px solid #22303d; }
 .t-seen i { display: block; height: 100%; background: #ff5a4a; }
 @media (max-height: 520px) { .tail-hud { top: 48px; padding: 1px 8px 3px; } .t-state { font-size: 14px; } .t-band { height: 8px; } }
+
+.prank-hud { top: 18px; left: 50%; transform: translateX(-50%); padding: 3px 14px; text-align: center; border-top: 4px solid #ff7ab8; }
+.prank-hud.pulse { background: rgba(255, 122, 184, 0.45); }
+.hu-input { display: block; width: 100%; box-sizing: border-box; margin-top: 3px; font: inherit; background: #0a0d12; color: #fff1d0; border: 2px solid var(--line); padding: 1px 6px; outline: none; text-transform: uppercase; pointer-events: auto; user-select: text; -webkit-user-select: text; }
+.hu-input:focus { border-color: var(--cyan); }
+@media (max-height: 520px) { .prank-hud { top: 48px; padding: 1px 10px; } }

@@ -26,6 +26,8 @@ export interface SaveData {
   seen: Record<string, boolean>;
   /** what the police have on you, for the news */
   crimes: Record<string, number>;
+  /** shopkeepers you've locked in, and how many times */
+  grudges: Record<string, number>;
   /** clip tool: every mission open */
   unlockAll: boolean;
 }
@@ -48,6 +50,7 @@ const fresh = (): SaveData => ({
   hour: 17.6,
   seen: {},
   crimes: {},
+  grudges: {},
   unlockAll: false,
 });
 

@@ -73,7 +73,9 @@ export class Reputation {
       this.site = site;
       if (site && GREET[site] && !this.greeted.has(site)) {
         this.greeted.add(site);
-        g.hud.say(site === 'mart' ? 'CLERK' : site === 'pawn' ? 'FENCE' : 'CLERK', GREET[site][this.tierHere]);
+        const grudge = g.save.data.grudges[site] ?? 0;
+        const line = grudge >= 3 ? 'You again. I\'ve had the locks changed, you know.' : grudge > 0 ? 'I know it was you who locked me in. I never forget a face.' : GREET[site][this.tierHere];
+        g.hud.say(site === 'mart' ? 'CLERK' : site === 'pawn' ? 'FENCE' : 'CLERK', line);
       }
     }
     // pedestrians notice you

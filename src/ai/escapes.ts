@@ -15,7 +15,7 @@ import type { Interactable } from '../player/player';
 
 export interface Station { name: string; entrance: THREE.Vector3; platform: THREE.Vector3; heading: number; trainT: number; train: THREE.Group; doorsOpen: boolean; }
 interface Manhole { pos: THREE.Vector3; pair: number; name: string; }
-interface Billboard { pos: THREE.Vector3; mesh: THREE.Mesh; tex: THREE.CanvasTexture; ctx: CanvasRenderingContext2D; flashT: number; scroll: number; }
+export interface Billboard { pos: THREE.Vector3; mesh: THREE.Mesh; tex: THREE.CanvasTexture; ctx: CanvasRenderingContext2D; flashT: number; scroll: number; msg?: string; msgT: number; }
 interface Drone { group: THREE.Group; center: THREE.Vector3; r: number; t: number; speed: number; decoyT: number; vel: THREE.Vector3; }
 interface Bollards { mesh: THREE.InstancedMesh; boxes: import('../world/collision').AABB[]; upT: number; h: number; x: number; z: number; axis: 'x' | 'z'; }
 
@@ -222,7 +222,7 @@ export class Escapes {
       back.cbox(x + ox, 3.5, z + oz, 0.4, 7, 0.4, { color: PAL.metal });
       g.scene.add(new THREE.Mesh(back.build(), worldMaterials().props));
       g.col.addCentered(x + ox, z + oz, 0.5, 0.5, 7, 0, false, 'pole');
-      const bb: Billboard = { pos: mesh.position, mesh, tex, ctx, flashT: 0, scroll: Math.random() * 400 };
+      const bb: Billboard = { pos: mesh.position, mesh, tex, ctx, flashT: 0, scroll: Math.random() * 400, msgT: 0 };
       this.billboards.push(bb);
       g.hack.hackables.push({
         kind: 'billboard', label: 'Billboard', pos: mesh.position, size: new THREE.Vector3(8.2, 3.2, 0.6), range: 60,
@@ -232,6 +232,7 @@ export class Escapes {
           g.peds.lure(new THREE.Vector3(mesh.position.x, 0, mesh.position.z), 40);
           g.police.lure(new THREE.Vector3(mesh.position.x, 0, mesh.position.z));
           g.audio.hackBlip();
+          g.pranks.openBillboard(bb);
           return 'BILLBOARD HIJACKED — EVERYONE LOOKS UP';
         },
       });
@@ -353,7 +354,21 @@ export class Escapes {
       for (const b of this.billboards) {
         if (b.pos.distanceTo(g.player.worldPos) > 170) continue;
         const c = b.ctx;
-        if (b.flashT > 0) {
+        if (b.msgT > 0) {
+          // your message, in the biggest letters that fit
+          b.msgT -= 0.12;
+          const on = Math.floor(b.msgT * 2) % 2 === 0;
+          c.fillStyle = on ? '#0a1218' : '#1a0f24';
+          c.fillRect(0, 0, 128, 48);
+          c.fillStyle = on ? '#46e6ff' : '#ff7ab8';
+          c.textAlign = 'center';
+          const words = (b.msg ?? '').split(' ');
+          const mid = Math.ceil(words.length / 2);
+          const l1 = words.slice(0, mid).join(' '), l2 = words.slice(mid).join(' ');
+          c.font = `bold ${Math.min(18, Math.floor(190 / Math.max(l1.length, l2.length, 8)))}px monospace`;
+          c.fillText(l1, 64, l2 ? 21 : 29);
+          if (l2) c.fillText(l2, 64, 39);
+        } else if (b.flashT > 0) {
           b.flashT -= 0.12;
           const on = Math.floor(b.flashT * 6) % 2 === 0;
           c.fillStyle = on ? '#46e6ff' : '#0a1218';

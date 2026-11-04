@@ -56,6 +56,7 @@ import { Minigame } from '../ui/minigame';
 import { TruckJob } from '../activities/truck';
 import { GetawayJob } from '../activities/getaway';
 import { TailJob } from '../activities/tail';
+import { Pranks } from '../activities/pranks';
 import { TouchControls } from '../ui/touch';
 import { device } from './device';
 import { Home } from '../world/home';
@@ -123,6 +124,7 @@ export class Game {
   truck!: TruckJob;
   getaway!: GetawayJob;
   tail!: TailJob;
+  pranks!: Pranks;
   /** a route the current mission wants drawn on the maps */
   routeLine: { x: number; z: number }[] | null = null;
   touch: TouchControls | null = null;
@@ -231,6 +233,7 @@ export class Game {
     this.truck = new TruckJob(this);
     this.getaway = new GetawayJob(this);
     this.tail = new TailJob(this);
+    this.pranks = new Pranks(this);
     this.gps = new Gps(this);
     this.missions = new Missions(this);
     this.map = new FullMap(this);
@@ -653,6 +656,7 @@ export class Game {
     this.truck.update(dt);
     this.getaway.update(dt);
     this.tail.update(dt);
+    this.pranks.update(dt);
     this.minigame.update(realDt);
     this.missions.update(dt);
     this.tricks.update(dt);

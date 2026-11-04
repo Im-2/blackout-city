@@ -5,16 +5,17 @@ import { DISTRICTS, District } from '../map/districts';
 import { OUTFITS } from '../player/disguise';
 import { UPGRADES } from '../core/economy';
 import { Races } from '../activities/races';
+import { BILLBOARD_PRESETS, cleanMessage } from '../activities/pranks';
 import { repTitle } from '../reputation/reputation';
 import type { Game } from '../core/game';
 
-export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies' | 'records';
+export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies' | 'records' | 'billboard';
 
-interface Row { left: string; right?: string; sub?: string; color?: string; act?: () => void; bar?: number; }
+interface Row { left: string; right?: string; sub?: string; color?: string; act?: () => void; bar?: number; input?: boolean; }
 
 const TAB_NAMES: Record<HomeTab, string> = {
   missions: 'MISSIONS', map: 'MAP', collection: 'COLLECTION', rep: 'REPUTATION', upgrades: 'UPGRADES',
-  wardrobe: 'OUTFITS', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS',
+  wardrobe: 'OUTFITS', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS', billboard: 'MESSAGE',
 };
 
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -26,6 +27,7 @@ export class HomeUi {
   private sel = 0;
   private title = '';
   private rows: Row[] = [];
+  private typed = '';
   open_ = false;
 
   constructor(private g: Game) {
@@ -34,6 +36,7 @@ export class HomeUi {
     this.el.style.display = 'none';
     g.hud.root.appendChild(this.el);
     this.el.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).tagName === 'INPUT') return;
       const t = (e.target as HTMLElement).closest('[data-tab],[data-row],[data-close]') as HTMLElement | null;
       if (!t) return;
       if (t.dataset.close !== undefined) { this.close(); return; }
@@ -92,6 +95,19 @@ export class HomeUi {
   private rowsFor(tab: HomeTab): Row[] {
     const g = this.g, s = g.save.data;
     switch (tab) {
+      case 'billboard': {
+        const post = (text: string, custom: boolean) => { g.pranks.post(text, custom); g.hud.toast(`ON THE BILLBOARD: ${text}`, 'hack'); this.close(); };
+        return [
+          { left: 'Your own words', sub: '24 letters, nothing hateful or nasty.', input: true, color: '#ff7ab8' },
+          { left: 'POST YOUR OWN', color: '#ff7ab8', act: () => {
+            const t = cleanMessage(this.typed);
+            if (!t) { g.hud.toast('THE BILLBOARD REFUSES THAT ONE', 'dim'); g.audio.deny(); return; }
+            this.typed = '';
+            post(t, true);
+          } },
+          ...BILLBOARD_PRESETS.map((m) => ({ left: m, color: '#46e6ff', act: () => post(m, false) })),
+        ];
+      }
       case 'missions':
         return g.missions.defs.map((d) => {
           const st = g.missions.status(d), done = s.completed[d.id];
@@ -164,6 +180,7 @@ export class HomeUi {
         <i style="background:${r.color ?? '#c8c3b5'}"></i>
         <div class="hu-main"><div class="hu-l"><span>${r.left}</span><em>${r.right ?? ''}</em></div>
         ${r.sub ? `<div class="hu-sub">${r.sub}</div>` : ''}
+        ${r.input ? `<input class="hu-input" maxlength="24" spellcheck="false" autocomplete="off" value="${this.typed.replace(/["&<>]/g, '')}"/>` : ''}
         ${r.bar !== undefined ? `<div class="bar"><div class="fill" style="width:${r.bar * 100}%"></div></div>` : ''}</div>
       </div>`).join('');
     const nav = `${this.tabs.length > 1 ? '[←→] TAB · ' : ''}[↑↓] CHOOSE · [ENTER] SELECT · [E] CLOSE`;
@@ -171,5 +188,7 @@ export class HomeUi {
       <div class="hu-head"><span>${this.title}</span><b>$${this.g.save.data.cash.toLocaleString()}</b><button class="hu-close" data-close>✕</button></div>
       ${tabs}<div class="hu-list">${rows}</div>
       <div class="hu-foot" data-close>${nav}</div>`;
+    const inputEl = this.el.querySelector('.hu-input') as HTMLInputElement | null;
+    if (inputEl) inputEl.addEventListener('input', () => { this.typed = inputEl.value; });
   }
 }

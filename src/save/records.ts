@@ -8,6 +8,7 @@ const KEEP = 5;
 export class Records {
   tricks: TrickScore[] = [];
   races: Record<string, number> = {};
+  pranks: Record<string, number> = {};
 
   constructor() {
     try {
@@ -17,7 +18,7 @@ export class Records {
   }
 
   private write() {
-    try { localStorage.setItem(KEY, JSON.stringify({ tricks: this.tricks, races: this.races })); } catch { /* ignore */ }
+    try { localStorage.setItem(KEY, JSON.stringify({ tricks: this.tricks, races: this.races, pranks: this.pranks })); } catch { /* ignore */ }
   }
 
   /** returns 1-based rank, or 0 if it missed the table */
@@ -28,6 +29,15 @@ export class Records {
     this.tricks.length = Math.min(KEEP, this.tricks.length);
     this.write();
     return this.tricks.indexOf(e) + 1;
+  }
+
+  /** true when this is a new best */
+  prank(id: string, score: number) {
+    const prev = this.pranks[id];
+    if (prev !== undefined && prev >= score) return false;
+    this.pranks[id] = score;
+    this.write();
+    return true;
   }
 
   /** true when this is a new best */

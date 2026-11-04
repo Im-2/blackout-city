@@ -46,6 +46,8 @@ export interface Site {
   build: (kit: Kit, s: Site) => void;
   tick?: (dt: number, s: Site) => void;
   state: Record<string, number | boolean>;
+  /** a door lock prank in progress */
+  prank?: { t: number; col: import('./collision').AABB | null; mesh: THREE.Object3D | null; was: string[] };
 }
 
 export interface Ladder { x: number; z: number; top: number; heading: number; topX: number; topZ: number; }
@@ -220,6 +222,8 @@ export class Buildings {
         });
         this.cam(s, new THREE.Vector3(-44.3, 3.9, 22.1), Math.PI * 0.78, -0.55);
         this.vend(k, s, -38.6, 22.0);
+        this.npc(k, 'local', -41, 13.6, Math.PI / 2, s); // a customer
+        this.prankDoor(k, s, -40.5, 11, ['CLERK', 'The door! Why won\'t the door...'], ['CUSTOMER', 'I only came in for milk!']);
       },
     });
 
@@ -317,6 +321,8 @@ export class Buildings {
         k.props.box(-21.5, 1.8, 12.95, -19.5, 1.85, 13.05, { color: '#8a8a84' });
         ['#c96a3a', '#d8782a', '#23283a', '#c4a03c', '#6e6a62'].forEach((c, i) => k.props.box(-21.4 + i * 0.4, 0.8, 12.75, -21.1 + i * 0.4, 1.8, 13.25, { color: c }));
         this.npc(k, 'local', -16.5, 19.4, Math.PI, s);
+        this.npc(k, 'tourist' as 'local', -18.6, 14.6, 0, s); // a browser
+        this.prankDoor(k, s, -16.7, 11, ['FENCE', 'Very funny! Who\'s doing this?'], ['CUSTOMER', 'Do you sell keys?']);
         s.interactables.push({
           pos: new THREE.Vector3(-16.5, 0.15, 16.6), radius: 2.0, label: 'Sell loot to the fence',
           enabled: () => g.loot.carried.length > 0,
@@ -575,7 +581,7 @@ export class Buildings {
           const at = i === 2 ? new THREE.Vector3(36.4, fl.y, 36.5) : new THREE.Vector3(28, fl.y, 37.4);
           s.interactables.push({
             pos: at, radius: 2.2, label: `Elevator to ${next.name}`,
-            enabled: () => i !== 0 || !!s.state.gate || g.police.heat > 0,
+            enabled: () => !s.prank && (i !== 0 || !!s.state.gate || g.police.heat > 0),
             action: () => {
               const dest = i + 1 === 2 ? new THREE.Vector3(35.5, next.y, 34) : new THREE.Vector3(28, next.y, 36);
               g.fadeTeleport(dest.x, dest.y, dest.z, Math.PI, `ELEVATOR — ${next.name}`);
@@ -588,6 +594,18 @@ export class Buildings {
           flapMesh.visible = !s.state.gate;
           for (const b of gate) b.enabled = true;
         };
+        // the lift can be held between floors, for laughs
+        this.hack(s, {
+          kind: 'prank', label: 'Lock the lift', pos: new THREE.Vector3(28, 2.8, 38.3), size: new THREE.Vector3(4, 4.4, 0.6), range: 22,
+          available: () => !s.prank,
+          act: () => {
+            s.prank = { t: 8, col: null, mesh: null, was: [] };
+            g.audio.alarmBell(2);
+            g.hud.say('LIFT', 'Please remain calm. Someone in here is crying.');
+            g.pranks.remember(s.id);
+            return 'LIFT LOCKED — 8s';
+          },
+        });
         // lobby guard + server room guard
         g.guards.addGuard([new THREE.Vector3(22, 0.15, 22), new THREE.Vector3(34, 0.15, 22)], s.id, () => { if (this.trespassing(s)) this.siteAlarm(s, 'TOWER SECURITY ALERT', 1); });
         g.guards.addGuard([new THREE.Vector3(18, SERVER_Y, 24.5), new THREE.Vector3(37.5, SERVER_Y, 24.5), new THREE.Vector3(37.5, SERVER_Y, 30.5), new THREE.Vector3(18, SERVER_Y, 30.5)], s.id, () => this.siteAlarm(s, 'SERVER ROOM BREACH', 2));
@@ -707,6 +725,32 @@ export class Buildings {
     });
   }
 
+  /** hack a shop's door shut for a few seconds: everybody inside overreacts */
+  private prankDoor(k: Kit, s: Site, x: number, z: number, line1: [string, string], line2: [string, string]) {
+    const g = this.g;
+    const col = k.solid(x - 0.95, 0, z - 0.15, x + 0.95, 2.8, z + 0.5, true);
+    col.enabled = false;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.6, 0.12), worldMat({ color: '#7a7e84' }));
+    mesh.position.set(x, 1.45, z - 0.05);
+    mesh.visible = false;
+    k.group.add(mesh);
+    this.hack(s, {
+      kind: 'prank', label: `${s.name} doors`, pos: new THREE.Vector3(x, 1.5, z), size: new THREE.Vector3(2.2, 2.8, 0.6), range: 26,
+      available: () => !s.prank,
+      act: () => {
+        s.prank = { t: 7, col, mesh, was: s.npcs.map((n) => (n as unknown as { state?: string }).state ?? 'idle') };
+        col.enabled = true;
+        mesh.visible = true;
+        for (const n of s.npcs) (n as unknown as { state: string }).state = 'handsup';
+        g.audio.alarmBell(2);
+        g.hud.say(line1[0], line1[1]);
+        setTimeout(() => { if (s.prank) g.hud.say(line2[0], line2[1]); }, 2600);
+        g.pranks.remember(s.id);
+        return `${s.name.toUpperCase()} LOCKED — 7s`;
+      },
+    });
+  }
+
   private vend(k: Kit, s: Site, x: number, z: number) {
     k.block(x - 0.5, 0.15, z - 0.4, x + 0.5, 2.0, z + 0.4, '#9b3b2f');
     k.glow.box(x - 0.4, 0.6, z - 0.41, x + 0.4, 1.8, z - 0.4, { color: '#d8e8f0' });
@@ -759,6 +803,7 @@ export class Buildings {
     const k = new Kit(this.g.col);
     s.kit = k;
     s.state = {};
+    s.prank = undefined;
     s.hackables = [];
     s.interactables = [];
     s.npcs = [];
@@ -793,6 +838,16 @@ export class Buildings {
       else if (s.kit && d > 110) this.streamOut(s);
       if (!s.kit) continue;
       s.tick?.(dt, s);
+      if (s.prank) {
+        s.prank.t -= dt;
+        if (s.prank.t <= 0) {
+          if (s.prank.col) s.prank.col.enabled = false;
+          if (s.prank.mesh) s.prank.mesh.visible = false;
+          s.prank.was.forEach((st, i) => { if (s.npcs[i]) (s.npcs[i] as unknown as { state: string }).state = st; });
+          s.prank = undefined;
+          g.hud.toast('THE DOORS CLICK OPEN', 'dim');
+        }
+      }
       for (const n of s.npcs) n.update(dt, ((n as unknown as { state?: string }).state === 'handsup' ? 'handsup' : 'idle'), 0);
       // clerk call countdown
       if (typeof s.state.callT === 'number' && (s.state.callT as number) > 0) {
