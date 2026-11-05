@@ -212,7 +212,7 @@ export class Jobs {
     a.t -= dt;
     if (a.t <= 0) { this.fail(); return; }
     // data job finishes when you walk through your front door with the drive
-    if (a.id === 'data' && a.done[0] && this.g.buildings.siteAt(this.g.player.pos.x, this.g.player.pos.z)?.id === 'home') { a.done[1] = true; this.check(); }
+    if (a.id === 'data' && a.done[0] && this.g.home.inHouse) { a.done[1] = true; this.check(); }
     // armored truck stops when it's damaged enough
     if (a.id === 'armored' && this.truck && this.truck.hp < 110) { this.truck.throttle = 0; this.truck.handbrake = true; (this.truck.ai as { crashedT: number }).crashedT = 0.01; }
   }

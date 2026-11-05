@@ -55,6 +55,7 @@ import { Places } from '../map/places';
 import { DAMAGE } from '../vehicles/damage';
 import { Repair } from '../activities/repair';
 import { ShopUi } from '../ui/shopui';
+import type { Properties } from '../world/properties';
 import { Minigame } from '../ui/minigame';
 import { TruckJob } from '../activities/truck';
 import { GetawayJob } from '../activities/getaway';
@@ -136,6 +137,7 @@ export class Game {
   touch: TouchControls | null = null;
   homeUi!: HomeUi;
   shopUi!: ShopUi;
+  properties!: Properties;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
   private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean; mid?: () => void } | null = null;
@@ -376,8 +378,10 @@ export class Game {
     this.addVehicle(ga);
     this.getawayCar = ga;
 
-    this.player.spawn(HOME.x, HOME.z, HOME.heading);
-    this.camRig.snapBehind(HOME.heading);
+    const wake = this.properties.start();
+    this.player.spawn(wake?.x ?? HOME.x, wake?.z ?? HOME.z, wake?.heading ?? HOME.heading);
+    if (wake) this.player.pos.y = wake.y;
+    this.camRig.snapBehind(wake?.heading ?? HOME.heading);
     this.camRig.pitch = -0.12;
     this.chunks.reset();
     this.traffic.reset();
@@ -412,6 +416,7 @@ export class Game {
     this.news.reset();
     this.disguise.reset();
     this.home.onWorldReset();
+    this.properties.onWorldReset();
     this.bikes.reset();
     this.tricks.reset();
     this.collection.reset();
@@ -660,6 +665,7 @@ export class Game {
     this.world.update(dt);
     this.home.update(dt, realDt);
     this.repair.update();
+    this.properties.update(dt, realDt);
     this.updateFade(realDt);
     this.news.update(realDt);
     this.hack.update(realDt, dt);

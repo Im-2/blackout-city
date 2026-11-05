@@ -41,6 +41,12 @@ export interface SaveData {
   rare: Record<string, boolean>;
   rareSeen: Record<string, boolean>;
   rareSets: Record<string, boolean>;
+  /** houses bought, by id. The first flat is always yours */
+  properties: string[];
+  /** where you wake up and whose bonuses count; 'home' is the first flat */
+  activeHome: string;
+  /** what's in each property's bays */
+  propCars: Record<string, (OwnedVehicle | null)[]>;
   /** clip tool: every mission open */
   unlockAll: boolean;
 }
@@ -74,6 +80,9 @@ const fresh = (): SaveData => ({
   rare: {},
   rareSeen: {},
   rareSets: {},
+  properties: [],
+  activeHome: 'home',
+  propCars: {},
   unlockAll: false,
 });
 

@@ -296,7 +296,7 @@ export class HackSystem {
     this.blend = damp(this.blend, this.active ? 1 : 0, 10, realDt);
     g.post.hack = this.blend;
 
-    this.energy = Math.min(100, this.energy + dt * (6.5 + g.save.data.upgrades.regen * 2));
+    this.energy = Math.min(100, this.energy + dt * (6.5 + g.save.data.upgrades.regen * 2 + g.properties.regen));
     for (const k of Object.keys(this.cooldowns) as HackKind[]) this.cooldowns[k] = Math.max(0, this.cooldowns[k] - dt);
 
     this.updateBlackouts(dt);
@@ -336,7 +336,7 @@ export class HackSystem {
     const info = HACK_INFO[h.kind];
     if (!h.available()) { g.hud.toast('ALREADY HACKED', 'dim'); g.audio.deny(); return; }
     if (this.cooldowns[h.kind] > 0) { g.hud.toast(`${info.tag} COOLDOWN`, 'dim'); g.audio.deny(); return; }
-    const cost = Math.round(info.cost * (1 - g.save.data.upgrades.hackCost * 0.15));
+    const cost = Math.round(info.cost * (1 - g.save.data.upgrades.hackCost * 0.15) * (1 - g.properties.hackOff));
     if (this.energy < cost) { g.hud.toast('NOT ENOUGH ENERGY', 'dim'); g.audio.deny(); return; }
     this.energy -= cost;
     this.cooldowns[h.kind] = info.cd;

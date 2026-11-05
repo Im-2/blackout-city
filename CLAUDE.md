@@ -71,6 +71,7 @@ src/
     interior.ts           Kit: modular rooms/props/colliders/surfaces, streamable
     buildings.ts          enterable buildings, ladders, ziplines, per-site alarms
     stores.ts             clothes stores, barber, corner shops, food stands
+    properties.ts         houses to buy: PROPERTIES table, floor plans, furniture, garages, benefits
     home.ts               the player's home + garage: baked lighting, furniture, TV, displays, parking
   characters/
     skins.ts              colour/detail specs from the reference sheets
@@ -242,7 +243,7 @@ Everything below is a `MissionDef` (or a place), so markers, map, minimap, LOCAT
 - **Test tip:** the screenshot tool's `scale` crops instead of scaling. Leave it out.
 
 ## Expansion pass 4 ("water, boats, metro, properties, clothing")
-Tag `stable-before-pass4` is the rollback point. Phases: 1 clothing (done), 2 properties, 3 waterfront, 4 visible metro. Each stops for testing. Deploy only when told.
+Tag `stable-before-pass4` is the rollback point. Phases: 1 clothing (done), 2 properties (done), 3 waterfront, 4 visible metro. Each stops for testing. Deploy only when told.
 - **Clothes (`player/clothes.ts`):** an item is a `Partial<Skin>`, in one of 7 slots. A `Look` is one item per slot; `buildSkin(look, hair)` draws it, and the rig caches by the key it builds. Add an item to `ITEMS` and it's on sale. Old saves' whole outfits (`LEGACY`) become items on load.
 - **Where:** THREADS + OLD CUTS block (1,6), MERIDIAN + QUICKSTOP block (7,4), VELVET + CORNER SHOP block (5,8), second-hand at Pawn & Loan. Each block: a two-unit row on the north side, a plain building behind (`world/stores.ts`). Check a new shop door isn't on a mission marker: Hot Parcel's at (-190, 9) drove the Old Town row one block west.
 - **Screen (`ui/shopui.ts`):** the camera moves to whichever direction has the most room and the player turns on the spot, so the preview is the real model. `Section`s of `Row`s, each with a look or hair to preview and a primary and alt action. Toasts don't show in `menu`; messages go in `.shop-msg`. Store walls are drawn unlit (`k.glow`) so shops stay bright at night.
@@ -250,6 +251,12 @@ Tag `stable-before-pass4` is the rollback point. Phases: 1 clothing (done), 2 pr
 - **Wardrobe:** 6 slots (`save.outfitSlots`), each marked CLEAN or ON THE NEWS; "Wear a clean disguise" picks a clean one. In the bedroom and the desk's WARDROBE tab.
 - **Food:** no inventory, you consume it on the spot. Hack energy, or `player.sprintT` (run +15 %). Every street cart sells; one per district is on the map (`minor`).
 - **Saving:** purchases follow the bed rule: in memory until you sleep. Intro cards are the exception.
+- **Properties (`world/properties.ts`):** six rows in `PROPERTIES`: Elm Court, block (3,8), $8k; Harcourt Row (5,1), $22k; Foundry Loft (8,3), $45k; The Glasshouse (7,9), $80k; Villa Marina (8,11), $140k; Skyline Penthouse (5,3), $250k. A row has the plan (`rooms`, `walls`, `doors`, `windows`), the benefits, and `fit`, which places furniture from `Furnish`. A piece of furniture stands with its back to a point and faces n/s/e/w; the bed, wardrobe, desk, safe, kitchen and trophies add their own interactions, which only work if you own the place. Home's painting and baking are shared: `paintRoom`, `partitionWall`, `makeBake`.
+- **Doors:** E + fade, front door on the north side. Unowned = buy card (`HomeUi.openProperty`) with a confirm step and a free tour. `Site.minY` keeps a raised home apart from the garage under it, `Site.unload` runs on stream-out, and `Buildings.load(id)` forces a site in. Raised homes (loft 14 m, penthouse 38 m) have a real surface and real views; at 60 m the penthouse only saw fog. Tier 3 and up get tall windows (`Opening.sill`, `head`).
+- **`g.home.inside` and `inHouse` now mean any property.** `g.home.doorOut` is the door of wherever you're hiding, so police stake that out. `g.properties.heatDiv` is how fast heat fades there.
+- **Active home** (`save.activeHome`, set on the desk's PROPERTIES tab): where you wake, the pinned map icon, and whose `regen` and `hackOff` count. `stashCap` is the largest safe you own: one stash, reachable from any home. Over the cap nothing is lost, you just can't add.
+- **Garages:** `save.propCars[id]` is indexed by bay. Stored vehicles are real only while the garage kit is loaded; one you've driven off stays out there. Bikes use bike bays first, then car bays. The first flat keeps its one bay and `save.garage`. Purchases follow the bed rule.
+- **Taxis:** each property has a stand that works once you own it (`Stand.prop`). **Map:** `property` icon, gold $ for sale, green O owned, HOMES tab in LOCATIONS.
 - **Activities:** `ActivitySpot` gained `icon`, `color`, `category`, `minor`, so a new shop needs no map code. New icons: hanger, scissors, cup, stand.
 
 ## Testing notes

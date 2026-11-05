@@ -13,10 +13,10 @@ const LABELS: [string, number, number][] = [
 ];
 
 type Filter = 'all' | PlaceCategory;
-const FILTERS: [Filter, string][] = [['all', 'ALL'], ['mission', 'MISSIONS'], ['race', 'RACES'], ['activity', 'ACTIVITIES'], ['shop', 'SHOPS'], ['service', 'SERVICES']];
+const FILTERS: [Filter, string][] = [['all', 'ALL'], ['mission', 'MISSIONS'], ['race', 'RACES'], ['activity', 'ACTIVITIES'], ['shop', 'SHOPS'], ['home', 'HOMES'], ['service', 'SERVICES']];
 
 const LEGEND: [IconKind, string, string, string?][] = [
-  ['diamond', '#e0322a', 'Mission', 'H'], ['flag', '#ff5ad8', 'Race'], ['house', '#7dffb0', 'Home'], ['bank', '#e6c84a', 'Bank'],
+  ['diamond', '#e0322a', 'Mission', 'H'], ['flag', '#ff5ad8', 'Race'], ['house', '#7dffb0', 'Home'], ['property', '#ffd24a', 'For sale', '$'], ['property', '#7dffb0', 'Owned', 'O'], ['bank', '#e6c84a', 'Bank'],
   ['shield', '#4a7cff', 'Police'], ['tower', '#c8c3b5', 'Tower'], ['ramp', '#b6ff3a', 'Stunts'], ['circle', '#5ac8c8', 'Shop', 'S'],
   ['coin', '#ffd24a', 'Fence', '$'], ['garage', '#8fb0d6', 'Garage', 'P'], ['taxi', '#d8b84a', 'Taxi'], ['metro', '#6a9fd8', 'Metro'],
   ['wheel', '#b48cff', 'Bike rack'], ['wheelpay', '#b48cff', 'Bike rental'], ['police', '#e0322a', 'Patrol car'], ['truck', '#ff8a3a', 'Intercept'], ['getaway', '#ffd24a', 'Getaway'], ['eye', '#9fe8ff', 'Tailing'], ['bolt', '#ff7ab8', 'Prank'], ['rarecar', '#e6c84a', 'Rare car'], ['hanger', '#ff9a5a', 'Clothes'], ['scissors', '#9fd0ff', 'Barber'], ['cup', '#7de0a0', 'Snacks'], ['stand', '#ffb84a', 'Food stand'], ['cluster', '#c8c3b5', 'Group', '3'],

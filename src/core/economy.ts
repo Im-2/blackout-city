@@ -49,9 +49,13 @@ export class Loot {
   stashAll() {
     const v = this.carriedValue;
     if (!v) return;
-    this.g.save.data.stash.push(...this.carried);
-    this.carried = [];
-    this.g.hud.toast(`STASHED $${v.toLocaleString()} OF GOODS — SELL THEM LATER`, 'cool');
+    const s = this.g.save.data, room = Math.max(0, this.g.properties.stashCap - s.stash.length);
+    if (!room) { this.g.hud.toast(`THE SAFE IS FULL (${s.stash.length}): SELL SOME, OR BUY A BIGGER PLACE`, 'dim'); this.g.audio.deny(); return; }
+    const moved = this.carried.slice(0, room);
+    s.stash.push(...moved);
+    this.carried = this.carried.slice(room);
+    const w = moved.reduce((n, i) => n + i.value, 0);
+    this.g.hud.toast(this.carried.length ? `STASHED $${w.toLocaleString()}. THE REST WON'T FIT` : `STASHED $${v.toLocaleString()} OF GOODS — SELL THEM LATER`, 'cool');
   }
 
   /** busted: carried loot is confiscated */

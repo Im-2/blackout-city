@@ -6,7 +6,7 @@ import { RARES } from '../activities/collection';
 import type { IconKind } from '../ui/mapicons';
 import type { Game } from '../core/game';
 
-export type PlaceCategory = 'mission' | 'race' | 'activity' | 'shop' | 'service';
+export type PlaceCategory = 'mission' | 'race' | 'activity' | 'shop' | 'service' | 'home';
 
 export interface Place {
   id: string;
@@ -33,8 +33,8 @@ export interface Place {
 export const PRIO = { active: 100, mission: 90, race: 85, home: 80, key: 70, activity: 60, shop: 50, garage: 40, minor: 30 };
 
 const STATIC: { id: string; name: string; desc: string; category: PlaceCategory; icon: IconKind; color: string; tag?: string; prio: number; x: number; z: number; status?: string; locked?: boolean }[] = [
-  { id: 'home', name: 'Home', desc: 'Your flat. Sleep in the bed to save. Police can\'t follow you in.', category: 'service', icon: 'house', color: '#7dffb0', prio: PRIO.home, x: -28, z: 46 },
-  { id: 'home-garage', name: 'Your garage', desc: 'Park a stolen vehicle here to add it to your collection.', category: 'service', icon: 'garage', color: '#7dffb0', tag: 'G', prio: PRIO.garage, x: -39.75, z: 47 },
+  { id: 'home', name: 'Home', desc: 'Your first flat. Sleep in the bed to save. Police can\'t follow you in.', category: 'home', icon: 'house', color: '#7dffb0', prio: PRIO.home, x: -28, z: 46 },
+  { id: 'home-garage', name: 'Your garage', desc: 'Park a stolen vehicle here to add it to your collection.', category: 'home', icon: 'garage', color: '#7dffb0', tag: 'G', prio: PRIO.garage, x: -39.75, z: 47 },
   { id: 'bank', name: 'City Savings Bank', desc: 'The big score. Start the heist at its marker on Union Blvd.', category: 'service', icon: 'bank', color: '#e6c84a', prio: PRIO.key, x: -84, z: -27 },
   { id: 'police', name: 'Police station', desc: 'Records room hack: heat -2, routes forgotten. Staff areas are trespassing.', category: 'service', icon: 'shield', color: '#4a7cff', prio: PRIO.key, x: 84, z: 11 },
   { id: 'tower', name: 'Vantage Tower', desc: 'Server room, rooftop helipad and ziplines.', category: 'service', icon: 'tower', color: '#c8c3b5', prio: PRIO.key, x: 28, z: 14 },
@@ -72,7 +72,16 @@ export class Places {
         locked: st === 'locked', done: st === 'done' || !!rec, pin: st !== 'done', missionMarker: true,
       }));
     }
-    for (const s of STATIC) out.push(base({ ...s, status: s.status ?? 'Available', locked: !!s.locked, pin: s.id === 'home' }));
+    const activeId = g.save.data.activeHome;
+    for (const s of STATIC) out.push(base({ ...s, status: s.id === 'home' ? (activeId === 'home' ? 'Owned: your home' : 'Owned') : s.status ?? 'Available', locked: !!s.locked, pin: s.id === 'home' && activeId === 'home' }));
+    for (const p of g.properties.list) {
+      const d = p.def, own = g.properties.owns(d.id), active = activeId === d.id;
+      out.push(base({
+        id: `prop-${d.id}`, name: d.name, desc: `${d.kind}. ${d.cars} car${d.cars > 1 ? 's' : ''}, ${d.bikes} bike${d.bikes > 1 ? 's' : ''}. ${d.features.join('. ')}.`, category: 'home',
+        icon: active ? 'house' : 'property', color: own ? '#7dffb0' : '#ffd24a', tag: own ? 'O' : '$', prio: active ? PRIO.home : own ? PRIO.key : PRIO.activity,
+        x: p.door.x, z: p.door.z, status: active ? 'Owned: your home' : own ? 'Owned' : `For sale: $${d.price.toLocaleString()}`, pin: active,
+      }));
+    }
     for (const s of g.activities.spots) {
       const bike = s.type === 'bike' || s.type === 'repair';
       const shop = s.category === 'shop';
@@ -91,7 +100,7 @@ export class Places {
         done: own, missionMarker: own,
       }));
     }
-    g.travel.stands.forEach((s, i) => out.push(base({ id: `taxi-${i}`, name: `Taxi: ${s.name}`, desc: 'E at the stand to fast travel. $50, free if you\'re broke. Refused while heat is above 0.', category: 'service', icon: 'taxi', color: '#d8b84a', prio: PRIO.minor, x: s.x, z: s.z })));
+    g.travel.stands.forEach((s, i) => g.travel.usable(s) && out.push(base({ id: `taxi-${i}`, name: `Taxi: ${s.name}`, desc: 'E at the stand to fast travel. $50, free if you\'re broke. Refused while heat is above 0.', category: 'service', icon: 'taxi', color: '#d8b84a', prio: PRIO.minor, x: s.x, z: s.z })));
     for (const s of g.escapes.stations) out.push(base({ id: `metro-${s.name}`, name: `Metro: ${s.name}`, desc: 'Hack or vault the turnstiles. Riding drops your trail.', category: 'service', icon: 'metro', color: '#6a9fd8', prio: PRIO.minor, x: s.entrance.x, z: s.entrance.z }));
     return out;
   }

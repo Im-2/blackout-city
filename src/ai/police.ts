@@ -13,7 +13,6 @@ import type { Game } from '../core/game';
 import { basicMat } from '../render/patch';
 import { GeoBuilder } from '../world/geo';
 import { worldMaterials } from '../world/materials';
-import { Home } from '../world/home';
 
 interface Pt { x: number; z: number; }
 type Mode = 'patrol' | 'pursuit' | 'roadblock' | 'stakeout' | 'leave' | 'deployed';
@@ -163,7 +162,7 @@ export class Police {
     this.lastSeenT += dt;
     // they can't come into the home: the search closes in on the front door
     const home = g.home.inside && this.heat > 0;
-    if (home) { this.lastKnown.set(Home.DOOR_OUT.x, 0, Home.DOOR_OUT.z + 2); this.lastSeenT = Math.max(this.lastSeenT, 2); }
+    if (home) { const D = g.home.doorOut; this.lastKnown.set(D.x, 0, D.z + D.dz * 2); this.lastSeenT = Math.max(this.lastSeenT, 2); }
 
     // unit management
     const cap = UNIT_CAP[this.heat];
@@ -227,7 +226,7 @@ export class Police {
     if (this.heat > 0) {
       const inBlack = g.hack.isBlackedOut(P.x, P.z);
       if (this.lastSeenT < 0.5) this.progress += dt / (20 + this.heat * 7);
-      else if (this.lastSeenT > 5) this.progress -= dt / (home ? 35 : inBlack ? 2.5 : 7);
+      else if (this.lastSeenT > 5) this.progress -= dt / (home ? g.properties.heatDiv : inBlack ? 2.5 : 7);
       if (this.progress >= 1 && this.heat < 5) this.setHeat(this.heat + 1, 'more units inbound');
       if (this.progress < 0) {
         if (this.heat > this.minHeat) {

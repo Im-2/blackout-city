@@ -8,7 +8,7 @@ import { worldMaterials } from '../world/materials';
 import { GeoBuilder } from '../world/geo';
 import type { Game } from '../core/game';
 
-export interface Stand { name: string; district: District | 'home'; x: number; z: number; }
+export interface Stand { name: string; district: District | 'home'; x: number; z: number; /** only once you own it */ prop?: string; }
 
 const FEE = 50;
 
@@ -27,6 +27,7 @@ export class FastTravel {
     const defs: [District, number, number][] = [['downtown', 5, 4], ['oldtown', 2, 6], ['docks', 10, 6], ['residential', 2, 1], ['park', 6, 11]];
     for (const [d, bi, bj] of defs) this.stands.push({ name: DISTRICTS[d].name, district: d, ...at(bi, bj) });
     this.stands.push({ name: 'Home', district: 'home', x: -24, z: 50.9 - 3.5 });
+    for (const p of g.properties.list) this.stands.push({ name: p.def.name, district: 'home', x: p.door.x - 3, z: p.door.z - 0.4, prop: p.def.id });
     const b = new GeoBuilder();
     this.stands.forEach((s, i) => {
       b.cbox(s.x, CURB_H + 1.4, s.z, 0.12, 2.8, 0.12, { color: '#3a3c3e' });
@@ -35,12 +36,22 @@ export class FastTravel {
       b.cbox(s.x + 1.2, CURB_H + 0.45, s.z, 1.8, 0.1, 0.45, { color: '#6b4a30' });
       g.col.addCentered(s.x, s.z, 0.2, 0.2, 3, 0, false, 'pole');
       g.interactables.push({
-        pos: new THREE.Vector3(s.x, CURB_H, s.z), radius: 2.2, label: 'Taxi stand: fast travel', enabled: () => !g.player.vehicle && !this.open,
+        pos: new THREE.Vector3(s.x, CURB_H, s.z), radius: 2.2, label: 'Taxi stand: fast travel', enabled: () => !g.player.vehicle && !this.open && this.usable(s),
         action: () => this.show(i),
       });
     });
     g.scene.add(new THREE.Mesh(b.build(), worldMaterials().props));
     return this;
+  }
+
+  usable(s: Stand) { return !s.prop || this.g.properties.owns(s.prop); }
+
+  private step(dir: number) {
+    const n = this.stands.length;
+    for (let k = 0; k < n; k++) {
+      this.sel = (this.sel + dir + n) % n;
+      if (this.sel !== this.from && this.usable(this.stands[this.sel])) return;
+    }
   }
 
   /** the player is frozen while the menu is up */
@@ -50,7 +61,8 @@ export class FastTravel {
     this.open = true;
     this.justOpened = true;
     this.from = i;
-    this.sel = (i + 1) % this.stands.length;
+    this.sel = i;
+    this.step(1);
   }
 
   update() {
@@ -58,9 +70,8 @@ export class FastTravel {
     const g = this.g;
     const inp = g.input;
     if (this.justOpened) { this.justOpened = false; return; } // the E press that opened it
-    const n = this.stands.length;
-    if (inp.pressed('menuDown')) { this.sel = (this.sel + 1) % n; if (this.sel === this.from) this.sel = (this.sel + 1) % n; }
-    if (inp.pressed('menuUp')) { this.sel = (this.sel - 1 + n) % n; if (this.sel === this.from) this.sel = (this.sel - 1 + n) % n; }
+    if (inp.pressed('menuDown')) this.step(1);
+    if (inp.pressed('menuUp')) this.step(-1);
     if (inp.pressed('back', 'interact')) { this.open = false; return; }
     if (g.police.heat > 0) { this.open = false; return; }
     if (inp.pressed('confirm')) this.go(this.stands[this.sel]);
@@ -76,7 +87,7 @@ export class FastTravel {
 
   menuHtml() {
     if (!this.open) return '';
-    const rows = this.stands.map((s, i) => (i === this.from ? '' : `<div class="${i === this.sel ? 'sel' : ''}">${i === this.sel ? '▶' : '&nbsp;'} ${s.name} <em>$${FEE}</em></div>`)).join('');
+    const rows = this.stands.map((s, i) => (i === this.from || !this.usable(s) ? '' : `<div class="${i === this.sel ? 'sel' : ''}">${i === this.sel ? '▶' : '&nbsp;'} ${s.name} <em>$${FEE}</em></div>`)).join('');
     return `<div class="label">TAXI</div>${rows}<div class="label">[↑↓] CHOOSE · [ENTER] GO · [E] CLOSE</div>`;
   }
 }

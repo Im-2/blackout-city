@@ -3,6 +3,7 @@
 import { TYPE_INFO } from '../missions/types';
 import { DISTRICTS, District } from '../map/districts';
 import { describe, lookSig } from '../player/clothes';
+import { PROPERTIES, STARTER_BENEFITS } from '../world/properties';
 import { UPGRADES } from '../core/economy';
 import { Races } from '../activities/races';
 import { BILLBOARD_PRESETS, cleanMessage } from '../activities/pranks';
@@ -10,13 +11,13 @@ import { RARE_SETS } from '../activities/collection';
 import { repTitle } from '../reputation/reputation';
 import type { Game } from '../core/game';
 
-export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies' | 'records' | 'billboard' | 'gallery';
+export type HomeTab = 'missions' | 'map' | 'collection' | 'rep' | 'upgrades' | 'wardrobe' | 'stash' | 'trophies' | 'records' | 'billboard' | 'gallery' | 'homes' | 'property';
 
 interface Row { left: string; right?: string; sub?: string; color?: string; act?: () => void; bar?: number; input?: boolean; }
 
 const TAB_NAMES: Record<HomeTab, string> = {
   missions: 'MISSIONS', map: 'MAP', collection: 'COLLECTION', rep: 'REPUTATION', upgrades: 'UPGRADES',
-  wardrobe: 'WARDROBE', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS', billboard: 'MESSAGE', gallery: 'GALLERY',
+  wardrobe: 'WARDROBE', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS', billboard: 'MESSAGE', gallery: 'GALLERY', homes: 'PROPERTIES', property: 'FOR SALE',
 };
 
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -29,6 +30,8 @@ export class HomeUi {
   private title = '';
   private rows: Row[] = [];
   private typed = '';
+  private forSale = '';
+  private confirming = false;
   open_ = false;
 
   constructor(private g: Game) {
@@ -58,6 +61,14 @@ export class HomeUi {
     g.input.unlock();
     this.el.style.display = 'block';
     this.render();
+  }
+
+  /** the card you get at a For Sale sign */
+  openProperty(id: string) {
+    this.forSale = id;
+    this.confirming = false;
+    const d = PROPERTIES.find((p) => p.id === id)!;
+    this.open(['property'], d.name.toUpperCase());
   }
 
   close() {
@@ -96,6 +107,40 @@ export class HomeUi {
   private rowsFor(tab: HomeTab): Row[] {
     const g = this.g, s = g.save.data;
     switch (tab) {
+      case 'property': {
+        const d = PROPERTIES.find((p) => p.id === this.forSale)!;
+        const can = s.cash >= d.price;
+        return [
+          {
+            left: this.confirming ? `CONFIRM: PAY $${d.price.toLocaleString()}` : `BUY FOR $${d.price.toLocaleString()}`,
+            right: can ? '' : `YOU HAVE $${s.cash.toLocaleString()}`,
+            sub: this.confirming ? 'Tap again to sign. It stays yours once you sleep in its bed.' : d.kind,
+            color: can ? '#7dffb0' : '#6a6f78',
+            act: can ? () => {
+              if (!this.confirming) { this.confirming = true; return; }
+              if (g.properties.buy(d.id)) { g.hud.toast(`${d.name.toUpperCase()} IS YOURS`, 'win'); this.close(); }
+            } : undefined,
+          },
+          { left: 'Look inside first', sub: 'The agent has left the door open.', color: '#46e6ff', act: () => { this.close(); g.properties.tour(d.id); } },
+          { left: 'Garage', right: `${d.cars} car${d.cars > 1 ? 's' : ''}, ${d.bikes} bike${d.bikes > 1 ? 's' : ''}` },
+          { left: 'Safe', right: `${d.stash} items` },
+          { left: 'Hiding here', right: `Heat fades ${Math.round((STARTER_BENEFITS.heatDiv / d.heatDiv) * 100 - 100)}% faster` },
+          { left: 'As your home', right: `+${d.regen}/s hack energy, hacks ${Math.round(d.hackOff * 100)}% cheaper` },
+          ...d.features.map((f) => ({ left: f, color: '#ffd24a' })),
+        ];
+      }
+      case 'homes': {
+        const home = (id: string, name: string, kind: string, sub: string): Row => {
+          const active = s.activeHome === id;
+          return { left: name, right: active ? 'YOUR HOME' : 'MAKE IT HOME', sub: `${kind}. ${sub}`, color: '#7dffb0', act: active ? undefined : () => g.properties.setHome(id) };
+        };
+        const rows: Row[] = [home('home', STARTER_BENEFITS.name, STARTER_BENEFITS.kind, '1 vehicle, 12 item safe.')];
+        for (const d of PROPERTIES) {
+          if (g.properties.owns(d.id)) rows.push(home(d.id, d.name, d.kind, `${d.cars} car${d.cars > 1 ? 's' : ''}, ${d.bikes} bike${d.bikes > 1 ? 's' : ''}, ${d.stash} item safe. +${d.regen}/s hack energy.`));
+          else rows.push({ left: d.name, right: `$${d.price.toLocaleString()}`, sub: `${d.kind}, for sale. Select to set GPS.`, color: '#ffd24a', act: () => { const at = g.properties.doorOf(d.id)!; g.gps.setWaypoint(at.x, at.z); g.hud.toast(`GPS SET: ${d.name.toUpperCase()}`, 'hack'); this.close(); } });
+        }
+        return rows;
+      }
       case 'billboard': {
         const post = (text: string, custom: boolean) => { g.pranks.post(text, custom); g.hud.toast(`ON THE BILLBOARD: ${text}`, 'hack'); this.close(); };
         return [
@@ -141,6 +186,13 @@ export class HomeUi {
         return [{ left: 'Open the full map', sub: 'Pan, zoom and set a waypoint.', act: () => { this.hide(); g.map.show('menu'); } }];
       case 'collection':
         if (!s.ownedVehicles.length) return [{ left: 'Nothing yet', sub: 'Drive a stolen vehicle into your garage and park it.' }];
+        if (g.properties.here) {
+          const P = g.properties.here;
+          return s.ownedVehicles.map((o) => {
+            const here = g.properties.isStored(P, o);
+            return { left: o.label, right: here ? 'IN THIS GARAGE: SEND AWAY' : 'BRING IT HERE', color: o.color, act: () => (here ? g.properties.sendAway(P, o) : g.properties.fetch(P, o)) };
+          });
+        }
         return s.ownedVehicles.map((o) => {
           const here = s.garage?.kind === o.kind && s.garage?.color === o.color;
           return { left: o.label, right: here ? 'IN THE GARAGE' : 'BRING IT HERE', color: o.color, act: here ? undefined : () => g.home.fetch(o) };

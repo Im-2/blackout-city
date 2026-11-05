@@ -18,13 +18,13 @@ import type { Buildings, Site } from './buildings';
 import type { Game } from '../core/game';
 import type { OwnedVehicle } from '../save/save';
 
-const F = 0.15; // floor
-const TOP = F + 3.0; // ceiling
-const WAIN = 1.15, DOOR_TOP = 2.35, WIN_TOP = 2.55;
+export const F = 0.15; // floor
+export const TOP = F + 3.0; // ceiling
+export const WAIN = 1.15, DOOR_TOP = 2.35, WIN_TOP = 2.55;
 
-interface Opening { axis: 'x' | 'z'; fixed: number; at: number; w: number; window?: boolean; }
-interface Lamp { x: number; y: number; z: number; c: [number, number, number]; reach: number; rect: [number, number, number, number]; }
-interface RoomDef { x0: number; z0: number; x1: number; z1: number; wall: string; wain: string; floor: (i: number, j: number) => string; top?: number; }
+export interface Opening { axis: 'x' | 'z'; fixed: number; at: number; w: number; window?: boolean; /** a taller window than the flat's */ sill?: number; head?: number; }
+export interface Lamp { x: number; y: number; z: number; c: [number, number, number]; reach: number; rect: [number, number, number, number]; }
+export interface RoomDef { x0: number; z0: number; x1: number; z1: number; wall: string; wain: string; floor: (i: number, j: number) => string; top?: number; }
 
 const LIVING: RoomDef = { x0: -34.9, z0: 36.1, x1: -21.1, z1: 44.5, wall: '#b08a5c', wain: '#6e4f33', floor: (_, j) => (j % 2 ? '#7a5634' : '#6e4c2e') };
 const KITCHEN: RoomDef = { x0: -20.9, z0: 36.1, x1: -11.5, z1: 44.5, wall: '#c2a878', wain: '#d8d0bc', floor: (i, j) => ((i + j) % 2 ? '#c8bfa8' : '#7c6f5c') };
@@ -58,29 +58,106 @@ const LAMPS: Lamp[] = [
 const AMBIENT: [number, number, number] = [0.3, 0.25, 0.2];
 
 /** multiply every vertex colour by the light it receives from its room's lamps */
-function bake(geo: GeoBuilder) {
-  const p = geo.pos, n = geo.nor, c = geo.col;
-  for (let i = 0; i < p.length; i += 3) {
-    const x = p[i], y = p[i + 1], z = p[i + 2];
-    let r = AMBIENT[0], gr = AMBIENT[1], b = AMBIENT[2];
-    for (const L of LAMPS) {
-      const [rx0, rz0, rx1, rz1] = L.rect;
-      if (x < rx0 - 0.3 || x > rx1 + 0.3 || z < rz0 - 0.3 || z > rz1 + 0.3) continue;
-      const dx = L.x - x, dy = L.y - y, dz = L.z - z;
-      const d = Math.hypot(dx, dy, dz) || 0.001;
-      if (d > L.reach) continue;
-      const f = 1 - d / L.reach;
-      const nl = Math.max(0, (dx * n[i] + dy * n[i + 1] + dz * n[i + 2]) / d);
-      const e = f * f * (0.45 + 0.55 * nl) * 1.05;
-      r += L.c[0] * e; gr += L.c[1] * e; b += L.c[2] * e;
+export function makeBake(lamps: Lamp[]) {
+  return (geo: GeoBuilder) => {
+    const p = geo.pos, n = geo.nor, c = geo.col;
+    for (let i = 0; i < p.length; i += 3) {
+      const x = p[i], y = p[i + 1], z = p[i + 2];
+      let r = AMBIENT[0], gr = AMBIENT[1], b = AMBIENT[2];
+      for (const L of lamps) {
+        const [rx0, rz0, rx1, rz1] = L.rect;
+        if (x < rx0 - 0.3 || x > rx1 + 0.3 || z < rz0 - 0.3 || z > rz1 + 0.3) continue;
+        const dx = L.x - x, dy = L.y - y, dz = L.z - z;
+        const d = Math.hypot(dx, dy, dz) || 0.001;
+        if (d > L.reach) continue;
+        const f = 1 - d / L.reach;
+        const nl = Math.max(0, (dx * n[i] + dy * n[i + 1] + dz * n[i + 2]) / d);
+        const e = f * f * (0.45 + 0.55 * nl) * 1.05;
+        r += L.c[0] * e; gr += L.c[1] * e; b += L.c[2] * e;
+      }
+      // unlit material: hex colours have to go in as linear to come out as themselves
+      c[i] = c[i] ** 2.2 * r; c[i + 1] = c[i + 1] ** 2.2 * gr; c[i + 2] = c[i + 2] ** 2.2 * b;
     }
-    // unlit material: hex colours have to go in as linear to come out as themselves
-    c[i] = c[i] ** 2.2 * r; c[i + 1] = c[i + 1] ** 2.2 * gr; c[i + 2] = c[i + 2] ** 2.2 * b;
+  };
+}
+const bake = makeBake(LAMPS);
+
+let homeMat: THREE.MeshBasicMaterial | null = null;
+export const homeMaterial = () => (homeMat ??= basicMat({ map: texGrain(), vertexColors: true }));
+const material = homeMaterial;
+
+/** floor, ceiling and inward-facing walls of a room, broken up so light can vary across them */
+export function paintRoom(k: Kit, r: RoomDef, openings: Opening[], base = 0) {
+  const g = k.props;
+  const top = (r.top ?? TOP) + base;
+  const rgb = hexToRgb;
+  const fy = F + base + 0.012; // just proud of the shell it's painted on, so they don't z-fight
+  for (let x = r.x0, i = 0; x < r.x1 - 0.01; x += 1, i++)
+    for (let z = r.z0, j = 0; z < r.z1 - 0.01; z += 1, j++) {
+      const xe = Math.min(x + 1, r.x1), ze = Math.min(z + 1, r.z1);
+      g.quad([x, fy, ze], [xe, fy, ze], [xe, fy, z], [x, fy, z], [0, 1, 0], x, z, xe, ze, rgb(r.floor(i, j)));
+      g.quad([x, top, z], [xe, top, z], [xe, top, ze], [x, top, ze], [0, -1, 0], x, z, xe, ze, rgb('#8c7a60'));
+    }
+  const tall = openings.find((o) => o.sill !== undefined);
+  const rows = [...new Set([F, WAIN, DOOR_TOP, WIN_TOP, ...(tall ? [tall.sill!, tall.head!] : [])])].map((v) => v + base).sort((p, q) => p - q);
+  rows.push(top);
+  const walls: ['x' | 'z', number, number, number, 1 | -1][] = [
+    ['z', r.z0, r.x0, r.x1, 1], ['z', r.z1, r.x0, r.x1, -1],
+    ['x', r.x0, r.z0, r.z1, 1], ['x', r.x1, r.z0, r.z1, -1],
+  ];
+  for (const [axis, wallAt, a0, a1, dir] of walls) {
+    const fixed = wallAt + dir * 0.015;
+    const ops = openings.filter((o) => o.axis === axis && Math.abs(o.fixed - wallAt) < 0.25 && o.at > a0 && o.at < a1);
+    const cuts = new Set<number>([a1]);
+    for (let a = a0; a < a1; a += 1) cuts.add(a);
+    for (const o of ops) { cuts.add(o.at - o.w / 2); cuts.add(o.at + o.w / 2); }
+    const pts = [...cuts].sort((p, q) => p - q);
+    for (let n = 0; n < pts.length - 1; n++) {
+      const a = pts[n], b = pts[n + 1];
+      if (b - a < 0.005) continue;
+      for (let v = 0; v < rows.length - 1; v++) {
+        const y0 = rows[v], y1 = rows[v + 1], am = (a + b) / 2, ym = (y0 + y1) / 2 - base;
+        if (ops.some((o) => Math.abs(am - o.at) < o.w / 2 && (o.window ? ym > (o.sill ?? WAIN) && ym < (o.head ?? WIN_TOP) : ym < DOOR_TOP))) continue;
+        const c = rgb(ym < WAIN ? r.wain : r.wall);
+        if (axis === 'z') {
+          if (dir > 0) g.quad([a, y0, fixed], [b, y0, fixed], [b, y1, fixed], [a, y1, fixed], [0, 0, 1], a, y0, b, y1, c);
+          else g.quad([b, y0, fixed], [a, y0, fixed], [a, y1, fixed], [b, y1, fixed], [0, 0, -1], a, y0, b, y1, c);
+        } else if (dir > 0) g.quad([fixed, y0, b], [fixed, y0, a], [fixed, y1, a], [fixed, y1, b], [1, 0, 0], a, y0, b, y1, c);
+        else g.quad([fixed, y0, a], [fixed, y0, b], [fixed, y1, b], [fixed, y1, a], [-1, 0, 0], a, y0, b, y1, c);
+      }
+    }
   }
 }
 
-let homeMat: THREE.MeshBasicMaterial | null = null;
-const material = () => (homeMat ??= basicMat({ map: texGrain(), vertexColors: true }));
+/** collision + door frames for a partition */
+export function partitionWall(k: Kit, openings: Opening[], axis: 'x' | 'z', fixed: number, a0: number, a1: number, base = 0) {
+  const ops = openings.filter((o) => o.axis === axis && Math.abs(o.fixed - fixed) < 0.01 && !o.window && o.at > a0 && o.at < a1).sort((p, q) => p.at - q.at);
+  const top = base + 4.2;
+  let cur = a0;
+  const seg = (s0: number, s1: number, y0: number, y1: number) => {
+    if (s1 - s0 < 0.01) return;
+    if (axis === 'z') k.solid(s0, y0, fixed - 0.1, s1, y1, fixed + 0.1, true);
+    else k.solid(fixed - 0.1, y0, s0, fixed + 0.1, y1, s1, true);
+  };
+  for (const o of ops) {
+    const a = o.at - o.w / 2, b = o.at + o.w / 2;
+    seg(cur, a, base, top);
+    seg(a, b, base + DOOR_TOP, top);
+    cur = b;
+    // door frame
+    const trim = '#3b2c20', t = 0.07, f0 = base + F, dt = base + DOOR_TOP;
+    if (axis === 'z') {
+      k.props.box(a - t, f0, fixed - 0.13, a, dt + t, fixed + 0.13, { color: trim });
+      k.props.box(b, f0, fixed - 0.13, b + t, dt + t, fixed + 0.13, { color: trim });
+      k.props.box(a, dt, fixed - 0.13, b, dt + t, fixed + 0.13, { color: trim });
+    } else {
+      k.props.box(fixed - 0.13, f0, a - t, fixed + 0.13, dt + t, a, { color: trim });
+      k.props.box(fixed - 0.13, f0, b, fixed + 0.13, dt + t, b + t, { color: trim });
+      k.props.box(fixed - 0.13, dt, a, fixed + 0.13, dt + t, b, { color: trim });
+    }
+  }
+  seg(cur, a1, base, top);
+}
 
 const canvasTex = (w: number, h: number) => {
   const c = document.createElement('canvas');
@@ -107,8 +184,8 @@ export class Home {
   private farGlow!: THREE.Mesh;
   private display: THREE.Mesh | null = null;
   private warm = 0;
-  private tv = canvasTex(192, 108);
-  private monitor = canvasTex(128, 72);
+  tv = canvasTex(192, 108);
+  monitor = canvasTex(128, 72);
   private tvT = 0;
   private monT = 0;
   private scroll = 192;
@@ -121,13 +198,19 @@ export class Home {
   constructor(private g: Game, private b: Buildings) {}
 
   /** in the flat itself (not the garage) */
-  get inHouse() { return this.g.siteAt(this.g.player.pos.x, this.g.player.pos.z, this.g.player.pos.y) === 'home' && !this.g.player.vehicle; }
+  get inHouse() {
+    if (this.g.player.vehicle) return false;
+    const s = this.g.siteAt(this.g.player.pos.x, this.g.player.pos.z, this.g.player.pos.y);
+    return s === 'home' || (!!s?.startsWith('prop-') && !s.endsWith('-g'));
+  }
   /** anywhere the police won't follow */
   get inside() {
     const P = this.g.player.worldPos;
     const s = this.g.siteAt(P.x, P.z, P.y);
-    return s === 'home' || s === 'homegarage';
+    return s === 'home' || s === 'homegarage' || !!s?.startsWith('prop-');
   }
+  /** the street outside wherever you're hiding: `dz` points away from the wall */
+  get doorOut() { return this.g.properties.doorOut ?? { x: Home.DOOR_OUT.x, z: Home.DOOR_OUT.z, dz: 1 }; }
 
   // ------------------------------------------------------------------ exterior
   buildExterior() {
@@ -215,75 +298,8 @@ export class Home {
     k.props = new GeoBuilder();
   }
 
-  /** floor, ceiling and inward-facing walls of a room, broken up so light can vary across them */
-  private paint(k: Kit, r: RoomDef) {
-    const g = k.props;
-    const top = r.top ?? TOP;
-    const rgb = hexToRgb;
-    const fy = F + 0.012; // just proud of the shell it's painted on, so they don't z-fight
-    for (let x = r.x0, i = 0; x < r.x1 - 0.01; x += 1, i++)
-      for (let z = r.z0, j = 0; z < r.z1 - 0.01; z += 1, j++) {
-        const xe = Math.min(x + 1, r.x1), ze = Math.min(z + 1, r.z1);
-        g.quad([x, fy, ze], [xe, fy, ze], [xe, fy, z], [x, fy, z], [0, 1, 0], x, z, xe, ze, rgb(r.floor(i, j)));
-        g.quad([x, top, z], [xe, top, z], [xe, top, ze], [x, top, ze], [0, -1, 0], x, z, xe, ze, rgb('#8c7a60'));
-      }
-    const rows = [F, WAIN, DOOR_TOP, WIN_TOP, top];
-    const walls: ['x' | 'z', number, number, number, 1 | -1][] = [
-      ['z', r.z0, r.x0, r.x1, 1], ['z', r.z1, r.x0, r.x1, -1],
-      ['x', r.x0, r.z0, r.z1, 1], ['x', r.x1, r.z0, r.z1, -1],
-    ];
-    for (const [axis, wallAt, a0, a1, dir] of walls) {
-      const fixed = wallAt + dir * 0.015;
-      const ops = OPENINGS.filter((o) => o.axis === axis && Math.abs(o.fixed - wallAt) < 0.25 && o.at > a0 && o.at < a1);
-      const cuts = new Set<number>([a1]);
-      for (let a = a0; a < a1; a += 1) cuts.add(a);
-      for (const o of ops) { cuts.add(o.at - o.w / 2); cuts.add(o.at + o.w / 2); }
-      const pts = [...cuts].sort((p, q) => p - q);
-      for (let n = 0; n < pts.length - 1; n++) {
-        const a = pts[n], b = pts[n + 1];
-        if (b - a < 0.005) continue;
-        for (let v = 0; v < rows.length - 1; v++) {
-          const y0 = rows[v], y1 = rows[v + 1], am = (a + b) / 2, ym = (y0 + y1) / 2;
-          if (ops.some((o) => Math.abs(am - o.at) < o.w / 2 && (o.window ? ym > WAIN && ym < WIN_TOP : ym < DOOR_TOP))) continue;
-          const c = rgb(ym < WAIN ? r.wain : r.wall);
-          if (axis === 'z') {
-            if (dir > 0) g.quad([a, y0, fixed], [b, y0, fixed], [b, y1, fixed], [a, y1, fixed], [0, 0, 1], a, y0, b, y1, c);
-            else g.quad([b, y0, fixed], [a, y0, fixed], [a, y1, fixed], [b, y1, fixed], [0, 0, -1], a, y0, b, y1, c);
-          } else if (dir > 0) g.quad([fixed, y0, b], [fixed, y0, a], [fixed, y1, a], [fixed, y1, b], [1, 0, 0], a, y0, b, y1, c);
-          else g.quad([fixed, y0, a], [fixed, y0, b], [fixed, y1, b], [fixed, y1, a], [-1, 0, 0], a, y0, b, y1, c);
-        }
-      }
-    }
-  }
-
-  /** collision + door frames for a partition */
-  private partition(k: Kit, axis: 'x' | 'z', fixed: number, a0: number, a1: number) {
-    const ops = OPENINGS.filter((o) => o.axis === axis && o.fixed === fixed && !o.window).sort((p, q) => p.at - q.at);
-    let cur = a0;
-    const seg = (s0: number, s1: number, y0: number, y1: number) => {
-      if (s1 - s0 < 0.01) return;
-      if (axis === 'z') k.solid(s0, y0, fixed - 0.1, s1, y1, fixed + 0.1, true);
-      else k.solid(fixed - 0.1, y0, s0, fixed + 0.1, y1, s1, true);
-    };
-    for (const o of ops) {
-      const a = o.at - o.w / 2, b = o.at + o.w / 2;
-      seg(cur, a, 0, 4.2);
-      seg(a, b, DOOR_TOP, 4.2);
-      cur = b;
-      // door frame
-      const trim = '#3b2c20', t = 0.07;
-      if (axis === 'z') {
-        k.props.box(a - t, F, fixed - 0.13, a, DOOR_TOP + t, fixed + 0.13, { color: trim });
-        k.props.box(b, F, fixed - 0.13, b + t, DOOR_TOP + t, fixed + 0.13, { color: trim });
-        k.props.box(a, DOOR_TOP, fixed - 0.13, b, DOOR_TOP + t, fixed + 0.13, { color: trim });
-      } else {
-        k.props.box(fixed - 0.13, F, a - t, fixed + 0.13, DOOR_TOP + t, a, { color: trim });
-        k.props.box(fixed - 0.13, F, b, fixed + 0.13, DOOR_TOP + t, b + t, { color: trim });
-        k.props.box(fixed - 0.13, DOOR_TOP, a, fixed + 0.13, DOOR_TOP + t, b, { color: trim });
-      }
-    }
-    seg(cur, a1, 0, 4.2);
-  }
+  private paint(k: Kit, r: RoomDef) { paintRoom(k, r, OPENINGS); }
+  private partition(k: Kit, axis: 'x' | 'z', fixed: number, a0: number, a1: number) { partitionWall(k, OPENINGS, axis, fixed, a0, a1); }
 
   private mug(k: Kit, x: number, y: number, z: number, color = '#d8d0bc') {
     k.props.cbox(x, y + 0.06, z, 0.09, 0.12, 0.09, { color });
@@ -503,7 +519,7 @@ export class Home {
       { pos: new THREE.Vector3(-34.2, F, 38), radius: 1.3, label: 'Door to the garage', enabled: () => !g.player.vehicle, action: () => { g.audio.door(); g.fadeTeleport(-36.1, F, 38, -Math.PI / 2, ''); } },
       { get label() { return g.police.heat > 0 ? 'Bed: too hot to sleep (lose the heat first)' : g.missions.run ? 'Bed: finish your mission first' : 'Sleep: save game, skip 8 hours'; }, pos: new THREE.Vector3(-32.6, F, 30.6), radius: 1.5, enabled: () => true, action: () => this.sleep() },
       { pos: new THREE.Vector3(-27, F, 30.6), radius: 1.5, label: 'Wardrobe: change outfit', enabled: () => true, action: () => g.shopUi.wardrobe() },
-      { pos: new THREE.Vector3(-15.75, F, 30.5), radius: 1.5, label: 'Hacker desk', enabled: () => true, action: () => ui().open(['missions', 'map', 'wardrobe', 'gallery', 'collection', 'rep', 'records', 'upgrades'], 'HACKER DESK') },
+      { pos: new THREE.Vector3(-15.75, F, 30.5), radius: 1.5, label: 'Hacker desk', enabled: () => true, action: () => ui().open(['missions', 'homes', 'map', 'wardrobe', 'gallery', 'collection', 'rep', 'records', 'upgrades'], 'HACKER DESK') },
       { get label() { const v = g.loot.carriedValue; return v ? `Stash your loot ($${v.toLocaleString()})` : `Open the stash (${g.save.data.stash.length})`; }, pos: new THREE.Vector3(-33.3, F, 40.45), radius: 1.2, enabled: () => true, action: () => { if (g.loot.carriedValue) { g.loot.stashAll(); this.refreshDisplays(); } else ui().open(['stash'], 'STASH'); } },
       { pos: new THREE.Vector3(-33.6, F, 42.6), radius: 1.3, label: 'Trophy shelf', enabled: () => true, action: () => ui().open(['trophies'], 'TROPHIES') },
       { pos: new THREE.Vector3(-13.6, F, 43), radius: 1.2, label: 'Make coffee', enabled: () => g.hack.energy < 100, action: () => { g.hack.energy = 100; g.audio.pop(); g.hud.toast('COFFEE. HACK ENERGY FULL', 'cool'); } },
@@ -554,7 +570,7 @@ export class Home {
     g.fadeTeleport(Home.DOOR_OUT.x, CURB_H, Home.DOOR_OUT.z, 0, g.police.heat > 0 ? 'THEY ARE STILL OUT HERE' : '');
   }
 
-  private sleep() {
+  sleep() {
     const g = this.g;
     if (g.police.heat > 0) { g.hud.toast('TOO HOT TO SLEEP — HEAT MUST BE ZERO', 'dim'); g.audio.deny(); return; }
     if (g.missions.run) { g.hud.toast('FINISH YOUR MISSION FIRST', 'dim'); g.audio.deny(); return; }
@@ -664,8 +680,8 @@ export class Home {
 
   /** where officers wait for you when you've gone inside */
   stakeout(i: number) {
-    const a = (i % 6) / 5 - 0.5, row = 1 + Math.floor(i / 6);
-    return { x: Home.DOOR_OUT.x + a * 9, z: Home.DOOR_OUT.z + 2.2 + row * 0.8 };
+    const a = (i % 6) / 5 - 0.5, row = 1 + Math.floor(i / 6), D = this.doorOut;
+    return { x: D.x + a * 9, z: D.z + D.dz * (2.2 + row * 0.8) };
   }
 
   // ------------------------------------------------------------------ per frame
@@ -700,7 +716,7 @@ export class Home {
       g.carAction = { label: known ? (v.health < 0.999 ? 'Park it: free repair' : 'Park it in the garage') : `Park and repair: add ${v.label.toLowerCase()} to the collection`, action: () => this.park(v) };
     }
 
-    if (!this.inHouse || !this.site.kit) return;
+    if (!this.inHouse) return;
     this.tvT -= realDt;
     if (this.tvT <= 0) { this.tvT = 1 / 12; this.drawTv(); }
     this.monT -= realDt;

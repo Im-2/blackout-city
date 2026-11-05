@@ -14,6 +14,7 @@ import { Rng } from '../core/math';
 import { Kit } from './interior';
 import { Home } from './home';
 import { Stores, STORE_BLOCKS } from './stores';
+import { Properties, PROPERTY_BLOCKS } from './properties';
 import { GeoBuilder } from './geo';
 import { worldMat } from '../render/patch';
 import { worldMaterials } from './materials';
@@ -35,6 +36,10 @@ export interface Site {
   ceiling: number;
   /** ignored above this height (so the roof isn't "inside") */
   maxY?: number;
+  /** ignored below this height (a home up a tower) */
+  minY?: number;
+  /** called as it streams out */
+  unload?: () => void;
   /** street-facing approach point used for teleports */
   approach: { x: number; z: number; heading: number };
   kit: Kit | null;
@@ -65,6 +70,7 @@ const RESERVED: Record<string, [number, number]> = {
   longjump: [4, 10],
   shoreleap: [3, 11],
   ...STORE_BLOCKS,
+  ...PROPERTY_BLOCKS,
 };
 
 export class Buildings {
@@ -131,6 +137,8 @@ export class Buildings {
     this.buildTower();
     this.buildStubs();
     new Stores(g, this).build();
+    g.properties = new Properties(g, this);
+    g.properties.build();
     this.buildLadders();
     this.buildZiplines();
     // flush exteriors
@@ -794,12 +802,18 @@ export class Buildings {
 
   // ------------------------------------------------------------------ runtime
   siteAt(x: number, z: number, y = 0): Site | null {
-    for (const s of this.sites) if (s.open && x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && (s.id !== 'tower' || y < 46) && (s.maxY === undefined || y < s.maxY)) return s;
+    for (const s of this.sites) if (s.open && x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && (s.id !== 'tower' || y < 46) && (s.maxY === undefined || y < s.maxY) && (s.minY === undefined || y >= s.minY)) return s;
     return null;
   }
 
   reset() {
     for (const s of this.sites) this.streamOut(s);
+  }
+
+  /** make sure a site's interior exists now (you're about to stand in it) */
+  load(id: string) {
+    const s = this.sites.find((x) => x.id === id);
+    if (s && !s.kit) this.streamIn(s);
   }
 
   private streamIn(s: Site) {
@@ -820,6 +834,7 @@ export class Buildings {
   private streamOut(s: Site) {
     const g = this.g;
     if (!s.kit) return;
+    s.unload?.();
     s.kit.dispose(g.scene);
     s.kit = null;
     g.hack.hackables = g.hack.hackables.filter((h) => !s.hackables.includes(h));
