@@ -382,7 +382,7 @@ export class Metro {
     for (let i = 0; i < TRAINS; i++) {
       const k = Math.floor((i * n) / TRAINS);
       const st = this.stations[k];
-      const t: Train = { s: st.s, v: 0, next: k, dwell: DWELL * (0.3 + i * 0.25), stopT: 0, doors: 0, pos: new THREE.Vector3(), arrived: true };
+      const t: Train = { s: st.s, v: 0, next: (k + 1) % n, dwell: DWELL * (0.3 + i * 0.25), stopT: 0, doors: 0, pos: new THREE.Vector3(), arrived: true };
       this.trains.push(t);
       if (!this.hacked[i]) {
         this.hacked[i] = true;
