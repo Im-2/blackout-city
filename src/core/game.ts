@@ -57,6 +57,7 @@ import { Repair } from '../activities/repair';
 import { ShopUi } from '../ui/shopui';
 import type { Properties } from '../world/properties';
 import { Water } from '../world/water';
+import { Metro } from '../world/metro';
 import { DockHeist, WaterRace } from '../activities/waterjobs';
 import { Minigame } from '../ui/minigame';
 import { TruckJob } from '../activities/truck';
@@ -141,6 +142,7 @@ export class Game {
   shopUi!: ShopUi;
   properties!: Properties;
   water!: Water;
+  metro!: Metro;
   waterRace!: WaterRace;
   dockHeist!: DockHeist;
   /** context action for E while driving (e.g. respray booth) */
@@ -237,6 +239,7 @@ export class Game {
     await step(0.82, 'opening shops');
     this.buildings = new Buildings(this).build();
     this.home = this.buildings.home;
+    this.metro = new Metro(this).build();
     this.escapes = new Escapes(this).build();
     this.travel = new FastTravel(this).build();
     this.stunts = new Stunts(this).build();
@@ -426,6 +429,7 @@ export class Game {
     this.home.onWorldReset();
     this.properties.onWorldReset();
     this.water.reset();
+    this.metro.reset();
     this.bikes.reset();
     this.tricks.reset();
     this.collection.reset();
@@ -676,6 +680,7 @@ export class Game {
     this.repair.update();
     this.properties.update(dt, realDt);
     this.water.update(dt, realDt);
+    this.metro.update(dt);
     this.waterRace.update(dt);
     this.updateFade(realDt);
     this.news.update(realDt);
@@ -719,6 +724,7 @@ export class Game {
     }
 
     this.camRig.update(realDt, this);
+    this.metro.camera();
     this.env.follow(this.player.worldPos, this.time);
     this.audio.listener.copy(this.player.worldPos);
     this.audio.update(realDt, { car: pv, sirenDist: this.police.nearestSiren(this.player.worldPos), hack: this.hack.active, time: this.time });

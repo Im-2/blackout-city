@@ -36,6 +36,8 @@ export class Player {
   private vault: { t: number; dur: number; from: THREE.Vector3; to: THREE.Vector3; top: number } | null = null;
   focus: Interactable | Vehicle | null = null;
   focusLabel = '';
+  /** riding a metro train */
+  aboard = false;
   /** seconds of faster running left, from food */
   sprintT = 0;
 
@@ -62,6 +64,7 @@ export class Player {
     this.pos.set(x, Math.max(gy, this.g.col.groundUnder(x, z, R, 1.5)), z);
     this.travel = null;
     this.hidden = false;
+    this.aboard = false;
     this.view.root.visible = true;
     this.heading = heading;
     this.vx = this.vz = this.vy = 0;
@@ -114,6 +117,12 @@ export class Player {
       const v = this.vehicle;
       if (v) { v.throttle = 0; v.steer = 0; v.handbrake = true; }
       this.view.update(dt, v ? (v.two ? 'ride' : 'drive') : 'idle', 0);
+      return;
+    }
+    if (this.aboard) {
+      this.view.update(dt, 'idle', 0);
+      this.syncView();
+      if (inp.pressed('interact')) g.metro.getOff();
       return;
     }
     if (this.hidden) {

@@ -1,7 +1,7 @@
 // DOM HUD + screens. Pixel font, dark navy panels (art bible §6).
 import * as THREE from 'three';
 import { HACK_INFO, HackKind } from '../hacking/hack';
-import { BLOCKS, CHANNEL, HALF, LAGOON, PITCH, ROAD_HALF, SHORE, blockBounds, BANK_BLOCK, DROP_BLOCK } from '../world/layout';
+import { BLOCKS, CHANNEL, HALF, LAGOON, METRO_LINE, PITCH, ROAD_HALF, SHORE, blockBounds, BANK_BLOCK, DROP_BLOCK } from '../world/layout';
 import { DISTRICTS, districtOfBlock } from '../map/districts';
 import { TYPE_INFO, MissionDef } from '../missions/types';
 import type { Missions } from '../missions/missions';
@@ -497,6 +497,15 @@ export class Hud {
         x.fillStyle = isBank ? '#4a5a3a' : isDrop ? '#5a4a2a' : DISTRICTS[districtOfBlock(bi, bj)].map;
         x.fillRect((b.x0 + E) * S, (b.z0 + E) * S, (b.x1 - b.x0) * S, (b.z1 - b.z0) * S);
       }
+    // the metro line
+    x.strokeStyle = '#6a9fd8';
+    x.lineWidth = 2.5;
+    x.setLineDash([6, 3]);
+    x.beginPath();
+    METRO_LINE.forEach(([mx, mz], i) => { if (i) x.lineTo((mx + E) * S, (mz + E) * S); else x.moveTo((mx + E) * S, (mz + E) * S); });
+    x.closePath();
+    x.stroke();
+    x.setLineDash([]);
     // the lagoon and the cut, then the piers
     x.fillStyle = '#16303c';
     x.fillRect((LAGOON.x0 + E) * S, (LAGOON.z0 + E) * S, (LAGOON.x1 - LAGOON.x0) * S, (LAGOON.z1 - LAGOON.z0) * S);

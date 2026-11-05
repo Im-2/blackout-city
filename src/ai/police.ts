@@ -319,6 +319,7 @@ export class Police {
     } else {
       for (const o of this.officers) if (o.knockT <= 0 && Math.hypot(o.pos.x - P.x, o.pos.z - P.z) < 1.7) pressing = true;
       if (g.guards.pressing()) pressing = true;
+      if (g.metro.copClose) pressing = true;
     }
     this.bust = pressing ? Math.min(1, this.bust + dt / 3) : Math.max(0, this.bust - dt / 2);
     if (this.bust >= 1) g.onBusted();

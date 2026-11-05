@@ -1,4 +1,4 @@
-// ESCAPE OPTIONS beyond "drive away": subway (gates, platforms, trains),
+// ESCAPE OPTIONS beyond "drive away" (the metro has its own file, world/metro.ts):
 // sewer manholes, hiding spots (dumpsters, van cargo), decoys (billboards,
 // delivery drones), hackable bollard barriers, and a HUD list of what's
 // nearby. Police adapt to the player's favourite escapes.
@@ -13,17 +13,16 @@ import { basicMat } from '../render/patch';
 import type { Game } from '../core/game';
 import type { Interactable } from '../player/player';
 
-export interface Station { name: string; entrance: THREE.Vector3; platform: THREE.Vector3; heading: number; trainT: number; train: THREE.Group; doorsOpen: boolean; }
 interface Manhole { pos: THREE.Vector3; pair: number; name: string; }
 export interface Billboard { pos: THREE.Vector3; mesh: THREE.Mesh; tex: THREE.CanvasTexture; ctx: CanvasRenderingContext2D; flashT: number; scroll: number; msg?: string; msgT: number; }
 interface Drone { group: THREE.Group; center: THREE.Vector3; r: number; t: number; speed: number; decoyT: number; vel: THREE.Vector3; }
 interface Bollards { mesh: THREE.InstancedMesh; boxes: import('../world/collision').AABB[]; upT: number; h: number; x: number; z: number; axis: 'x' | 'z'; }
 
-const UG = -8; // underground floor height
+const UG = -8; // nothing's down here now; the sums for it stay out of the way
 const CEIL = 4.2;
 
 export class Escapes {
-  stations: Station[] = [];
+  get stations() { return this.g.metro.stations; }
   manholes: Manhole[] = [];
   billboards: Billboard[] = [];
   drones: Drone[] = [];
@@ -36,115 +35,16 @@ export class Escapes {
   private t = 0;
   private vanSpot: Interactable | null = null;
   private tickerT = 0;
-  /** stations only render while the player is underground */
-  private undergroundGroups: THREE.Object3D[] = [];
 
   constructor(private g: Game) {}
 
   build() {
-    this.buildSubway();
     this.buildSewers();
     this.buildDumpsters();
     this.buildBillboards();
     this.buildDrones();
     this.buildBollards();
     return this;
-  }
-
-  // ------------------------------------------------------------------ subway
-  private buildSubway() {
-    const g = this.g;
-    const defs: [string, number, number][] = [
-      ['Union Sq', -98, 9.2],
-      ['Foundry', 66, -47.2],
-      ['Harbor', 121, 121],
-      ['Old Town', -250, 65],
-      ['Northside', 25, -271],
-    ];
-    const ext = new GeoBuilder();
-    defs.forEach(([name, x, z], i) => {
-      // street kiosk: railings, stair hole, sign post
-      ext.box(x - 1.6, CURB_H, z - 1.2, x + 1.6, CURB_H + 0.02, z + 1.2, { color: '#2a2a2a' });
-      for (const sx of [-1.6, 1.6]) ext.box(x + sx - 0.06, CURB_H, z - 1.2, x + sx + 0.06, CURB_H + 1.0, z + 1.2, { color: '#4a5b39' });
-      ext.box(x - 1.6, CURB_H, z + 1.14, x + 1.6, CURB_H + 1.0, z + 1.26, { color: '#4a5b39' });
-      ext.cbox(x - 2.0, CURB_H + 1.6, z - 1.2, 0.12, 3.2, 0.12, { color: PAL.metal });
-      ext.cbox(x - 2.0, CURB_H + 3.3, z - 1.2, 0.7, 0.7, 0.12, { color: '#2f5a8a' });
-      g.col.add(x - 1.7, 0, z + 1.1, x + 1.7, 1.1, z + 1.3, false, 'rail');
-      const sk = new Kit(g.col);
-      sk.sign('M', x - 2.0, CURB_H + 3.3, z - 1.27, Math.PI, 0.6, 0.6, '#2f5a8a', '#ffffff');
-      sk.sign(`METRO · ${name.toUpperCase()}`, x, CURB_H + 1.4, z - 1.3, Math.PI, 3, 0.5, '#1e2a36', '#ffd27a');
-      sk.finish(g.scene);
-      // underground platform room directly below
-      const k = new Kit(g.col);
-      const px0 = x - 14, px1 = x + 14, pz0 = z - 3, pz1 = z + 9;
-      k.room(px0, pz0, px1, pz1, { y: UG, h: CEIL, floor: '#8a857c', floor2: '#7a756c', wall: '#c8c3b5' });
-      // track pit + rails along the far side
-      k.props.box(px0, UG - 0.06, z + 5.5, px1, UG - 0.04, pz1, { color: '#2a2a28' });
-      for (const rz of [6.4, 8.0]) k.props.box(px0, UG - 0.03, z + rz, px1, UG + 0.02, z + rz + 0.1, { color: '#8a8a84' });
-      k.props.box(px0, UG, z + 5.3, px1, UG + 0.01, z + 5.5, { color: PAL.laneYellow });
-      k.solid(px0, UG, z + 5.5, px1, UG + 2.2, z + 5.7, false); // platform edge
-      // turnstiles (hackable) + stairs block
-      const gate: import('../world/collision').AABB[] = [];
-      for (let gx = x - 4; gx <= x + 4; gx += 1.6) if (Math.abs(gx - x) > 0.5) gate.push(k.block(gx - 0.1, UG, z + 1.6, gx + 0.1, UG + 1.05, z + 2.0, '#5a5f64'));
-      const flap = k.solid(x - 0.7, UG, z + 1.6, x + 0.7, UG + 1.05, z + 2.0, false);
-      k.block(x - 1.6, UG, pz0 + 0.2, x + 1.6, UG + 3.8, z - 0.2, '#7a766d', true);
-      k.sign(`${name.toUpperCase()} STATION`, x, UG + 3.2, z + 5.2, 0, 5, 0.6, '#2f5a8a', '#ffffff');
-      for (let bx = px0 + 3; bx < px1 - 2; bx += 7) k.block(bx, UG, z + 3.2, bx + 2, UG + 0.5, z + 3.8, '#6b4a30');
-      k.finish(g.scene);
-      this.undergroundGroups.push(k.group);
-      // the train
-      const train = new THREE.Group();
-      const tb = new GeoBuilder();
-      for (let c = 0; c < 3; c++) {
-        const cx = c * 9.6;
-        tb.box(cx - 4.6, 0.2, -1.4, cx + 4.6, 3.2, 1.4, { color: '#c8c3b5', shadeSides: true });
-        tb.box(cx - 4.6, 1.4, -1.42, cx + 4.6, 2.4, 1.42, { color: PAL.carGlass, skip: { py: true, ny: true, pz: true, nz: true } });
-        tb.box(cx - 4.6, 0.7, -1.43, cx + 4.6, 0.95, 1.43, { color: '#2f5a8a', skip: { py: true, ny: true } });
-      }
-      const tm = new THREE.Mesh(tb.build(), worldMaterials().props);
-      train.add(tm);
-      const tg = new GeoBuilder();
-      for (let c = 0; c < 3; c++) tg.box(c * 9.6 - 4.4, 1.5, -1.44, c * 9.6 + 4.4, 2.3, 1.44, { color: '#e8d8a8', skip: { py: true, ny: true, pz: true, nz: true } });
-      train.add(new THREE.Mesh(tg.build(), basicMat({ vertexColors: true })));
-      train.position.set(px1 + 40, UG, z + 7.2);
-      g.scene.add(train);
-      this.undergroundGroups.push(train);
-      const st: Station = { name, entrance: new THREE.Vector3(x, CURB_H, z), platform: new THREE.Vector3(x, UG, z + 3), heading: 0, trainT: i * 9, train, doorsOpen: false };
-      this.stations.push(st);
-      let gateOpen = false;
-      g.hack.hackables.push({
-        kind: 'subway', label: 'Metro turnstiles', pos: new THREE.Vector3(x, UG + 0.8, z + 1.8), size: new THREE.Vector3(9, 1.1, 0.6), range: 14,
-        available: () => !gateOpen,
-        act: () => { gateOpen = true; flap.enabled = false; for (const b of gate) b.enabled = false; setTimeout(() => { gateOpen = false; flap.enabled = true; for (const b of gate) b.enabled = true; }, 20000); return 'TURNSTILES OPEN — 20s'; },
-      });
-      g.interactables.push(
-        { pos: st.entrance.clone(), radius: 2.2, label: `Enter metro (${name})`, enabled: () => !g.player.vehicle && g.player.pos.y > -1, action: () => { g.fadeTeleport(x, UG, z + 0.6, 0, `${name.toUpperCase()} STATION`); } },
-        { pos: new THREE.Vector3(x, UG, z + 0.6), radius: 1.8, label: 'Exit to the street', enabled: () => true, action: () => g.fadeTeleport(x, CURB_H, z - 2.2, Math.PI, 'STREET LEVEL') },
-        {
-          pos: new THREE.Vector3(x, UG, z + 4.6), radius: 7, label: 'Board train',
-          enabled: () => st.doorsOpen && g.player.pos.z > z + 2.1,
-          action: () => this.ride(st),
-        },
-      );
-    });
-    g.scene.add(new THREE.Mesh(ext.build(), worldMaterials().props));
-  }
-
-  private ride(from: Station) {
-    const g = this.g;
-    const i = this.stations.indexOf(from);
-    const to = this.stations[(i + 1) % this.stations.length];
-    g.audio.train(g.player.pos);
-    g.save.escape('subway');
-    g.fadeTeleport(to.platform.x, UG, to.platform.z + 1.2, Math.PI, `RODE THE METRO → ${to.name.toUpperCase()}`);
-    // the police lose the trail at the origin station
-    const p = g.police;
-    if (p.heat > 0) {
-      p.lastSeenT = Math.max(p.lastSeenT, 12);
-      p.lastKnown.copy(from.entrance);
-      p.progress = Math.max(0, p.progress - 0.5);
-      g.hud.hint('The cops are still watching the station you left.');
-    }
   }
 
   // ------------------------------------------------------------------ sewers
@@ -332,21 +232,6 @@ export class Escapes {
   update(dt: number) {
     const g = this.g;
     this.t += dt;
-    const under = g.player.pos.y < -2;
-    for (const o of this.undergroundGroups) o.visible = under;
-    // trains: arrive, stop with doors open, leave
-    for (const s of this.stations) {
-      s.trainT = (s.trainT + dt) % 30;
-      const t = s.trainT;
-      let x: number;
-      if (t < 4) x = 50 - (t / 4) * 50 * (2 - t / 4);
-      else if (t < 13) x = 0;
-      else if (t < 17) x = -Math.pow((t - 13) / 4, 2) * 60;
-      else x = 70;
-      s.doorsOpen = t >= 4 && t < 13;
-      s.train.position.x = s.entrance.x - 9.6 + x;
-      if (t > 3.9 && t < 4.0 && g.player.pos.y < -2 && Math.hypot(g.player.pos.x - s.entrance.x, g.player.pos.z - s.entrance.z) < 30) g.audio.train(g.player.pos);
-    }
     // billboards: news ticker / hijack flash
     this.tickerT -= dt;
     if (this.tickerT <= 0) {

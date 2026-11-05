@@ -102,7 +102,7 @@ export class Places {
       }));
     }
     g.travel.stands.forEach((s, i) => g.travel.usable(s) && out.push(base({ id: `taxi-${i}`, name: `Taxi: ${s.name}`, desc: 'E at the stand to fast travel. $50, free if you\'re broke. Refused while heat is above 0.', category: 'service', icon: 'taxi', color: '#d8b84a', prio: PRIO.minor, x: s.x, z: s.z })));
-    for (const s of g.escapes.stations) out.push(base({ id: `metro-${s.name}`, name: `Metro: ${s.name}`, desc: 'Hack or vault the turnstiles. Riding drops your trail.', category: 'service', icon: 'metro', color: '#6a9fd8', prio: PRIO.minor, x: s.entrance.x, z: s.entrance.z }));
+    for (const s of g.escapes.stations) out.push(base({ id: `metro-${s.name}`, name: `Metro: ${s.name}`, desc: `$5 at the gate, or hack it. Trains every minute or so. Ride and the police lose you, unless one gets on with you.`, category: 'service', icon: 'metro', color: '#6a9fd8', prio: PRIO.minor, x: s.entrance.x, z: s.entrance.z }));
     return out;
   }
 }

@@ -10,7 +10,7 @@ import type { Vehicle } from '../vehicles/vehicle';
 export type HackKind =
   | 'signal' | 'camera' | 'door' | 'lamp' | 'power' | 'alarm' | 'cell'
   | 'register' | 'laser' | 'safe' | 'alarmpanel' | 'gate' | 'server' | 'records' | 'vending'
-  | 'atm' | 'truck' | 'barrier' | 'billboard' | 'drone' | 'bollard' | 'subway' | 'prank' | 'bridge';
+  | 'atm' | 'truck' | 'barrier' | 'billboard' | 'drone' | 'bollard' | 'subway' | 'prank' | 'bridge' | 'train';
 
 export interface Hackable {
   kind: HackKind;
@@ -45,9 +45,10 @@ export const HACK_INFO: Record<HackKind, { cost: number; cd: number; tag: string
   billboard: { cost: 15, cd: 3, tag: 'AD', name: 'Billboard' },
   drone: { cost: 15, cd: 3, tag: 'DRN', name: 'Drone' },
   bollard: { cost: 25, cd: 4, tag: 'BOL', name: 'Bollards' },
-  subway: { cost: 10, cd: 1, tag: 'METRO', name: 'Subway gate' },
+  subway: { cost: 10, cd: 1, tag: 'METRO', name: 'Metro gate' },
   prank: { cost: 10, cd: 1, tag: 'LOCK', name: 'Door lock' },
   bridge: { cost: 30, cd: 3, tag: 'BRDG', name: 'Drawbridge' },
+  train: { cost: 20, cd: 5, tag: 'TRN', name: 'Metro train' },
 };
 
 interface Blackout { x: number; z: number; r: number; t: number; dur: number; s: number; block: number; }

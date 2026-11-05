@@ -57,6 +57,9 @@ export const CHANNEL = { x0: -40, z0: 325, x1: -16, z1: SHORE };
 /** the span of the drawbridge along the ring */
 export const BRIDGE = { x0: -40, x1: -16 };
 export const BRIDGE_H = 1.4;
+/** the elevated metro: corners of its loop, along the middle of the roads */
+export const METRO_LINE: [number, number][] = [[-280, 0], [-280, -280], [56, -280], [56, -56], [168, -56], [168, 168], [-112, 168], [-112, 0]];
+export const METRO_RAIL = 10;
 
 export function isWater(x: number, z: number) {
   if (x > SHORE || z > SHORE) return true;

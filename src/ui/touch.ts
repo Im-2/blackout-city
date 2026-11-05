@@ -230,6 +230,7 @@ export class TouchControls {
         { ...hack, r: 0, c: 1 },
       ];
     }
+    if (p.aboard) return g.metro.canGetOff ? [{ id: 'off', label: 'GET OFF', a: 'interact', r: 0, c: 0, big: true, hot: true }] : [];
     if (p.hidden) return [{ id: 'out', label: 'COME OUT', a: 'interact', r: 0, c: 0, big: true, hot: true }];
     if (v) {
       const pedals = this.s.drive !== 'stickonly';
