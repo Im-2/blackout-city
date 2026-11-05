@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { buildCar, CarKind, CarParts, LABELS, repaint } from './carMesh';
 import { clamp, damp, wrapAngle } from '../core/math';
 import { surfaceHeight } from '../world/layout';
+import { DAMAGE, HEALTH, impactDamage, massFactor } from './damage';
 import type { Collision } from '../world/collision';
 
 export interface CarParams {
@@ -65,7 +66,11 @@ export class Vehicle {
   handbrake = false;
   driver: Driver = 'none';
   hp = 100;
+  maxHp = 100;
   wrecked = false;
+  /** seconds until another hit counts in full, and how hard the last one was */
+  private hitT = 0;
+  private lastHit = 0;
   alarmT = 0;
   siren = false;
   isCop: boolean;
@@ -130,6 +135,22 @@ export class Vehicle {
       this.circleOffsets = Array.from({ length: n }, (_, i) => -half + (2 * half * i) / (n - 1));
     }
     this.grip = this.p.grip;
+    this.maxHp = this.hp = HEALTH[kind];
+  }
+
+  /** 0 = wrecked, 1 = perfect */
+  get health() { return this.hp / this.maxHp; }
+
+  /** engine output: normal until badly hurt, then fading a little */
+  private get power() {
+    const h = this.health;
+    return h >= DAMAGE.limpBelow ? 1 : DAMAGE.limpFloor + (1 - DAMAGE.limpFloor) * (h / DAMAGE.limpBelow);
+  }
+
+  repair() {
+    this.hp = this.maxHp;
+    this.wrecked = false;
+    this.hitT = this.lastHit = 0;
   }
 
   respray(color: string) {
@@ -197,7 +218,7 @@ export class Vehicle {
       this.yawRate = 0;
       this.vx *= 0.97;
       this.vz *= 0.97;
-      this.damage(Math.max(0, impact - 14) * (two ? 1 : 2));
+      this.damage(impactDamage(impact, DAMAGE.landingSafe, DAMAGE.landingScale));
       if (impact > 6) impacts.push({ v: this, other: null, impact: impact * 0.5, x: this.pos.x, y: this.pos.y, z: this.pos.z, nx: 0, nz: 0 });
     }
     this.collideStatic(impacts);
@@ -205,6 +226,7 @@ export class Vehicle {
   }
 
   update(dt: number, impacts: ImpactEvent[]) {
+    if (this.hitT > 0) this.hitT -= dt;
     if (this.air) { this.updateAir(dt, impacts); return; }
     const p = this.p;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
@@ -220,10 +242,11 @@ export class Vehicle {
     // longitudinal
     let a = 0;
     const boost = this.boost && thr > 0 && (this.two || this.kind === 'sports' || this.kind === 'muscle') && this.kind !== 'bicycle';
-    const maxS = p.maxSpeed * (boost ? 1.15 : 1);
+    const power = this.power;
+    const maxS = p.maxSpeed * (boost ? 1.15 : 1) * power;
     if (thr > 0) {
       if (vf < -0.8) { a = p.brake * thr; braking = true; }
-      else a = p.accel * (boost ? 1.5 : 1) * thr * (1 - Math.pow(clamp(vf / maxS, 0, 1), 2));
+      else a = p.accel * power * (boost ? 1.5 : 1) * thr * (1 - Math.pow(clamp(vf / maxS, 0, 1), 2));
     } else if (thr < 0) {
       if (vf > 0.8) { a = p.brake * thr; braking = true; }
       else a = vf > -p.reverse ? p.accel * 0.7 * thr : 0;
@@ -319,14 +342,19 @@ export class Vehicle {
         const cross = fx * res.nz - fz * res.nx;
         this.spin -= clamp(cross * off * impact * 0.09, -4, 4);
         if (impact > 2) impacts.push({ v: this, other: null, impact, x: c.x - res.nx * this.radius, y: this.pos.y + 0.7, z: c.z - res.nz * this.radius, nx: res.nx, nz: res.nz });
-        this.damage(Math.max(0, impact - 7) * 2.2);
+        this.damage(impactDamage(impact) * (res.solid ? 1 : DAMAGE.lightObject));
       }
     }
   }
 
   damage(amt: number) {
     if (amt <= 0 || this.wrecked) return;
-    this.hp -= amt;
+    // one scrape can't count over and over: inside the cooldown only the extra force of a harder hit lands
+    const felt = this.hitT > 0 ? amt - this.lastHit : amt;
+    this.lastHit = this.hitT > 0 ? Math.max(this.lastHit, amt) : amt;
+    this.hitT = DAMAGE.cooldown;
+    if (felt <= 0) return;
+    this.hp -= felt;
     if (this.hp <= 0) {
       this.hp = 0;
       this.wrecked = true;
@@ -429,8 +457,10 @@ export function collideVehicles(vs: Vehicle[], impacts: ImpactEvent[]) {
           A.spin += clamp((afz * dx - afx * dz) * a.off * jimp * ia * 0.16, -5, 5);
           B.spin -= clamp((bfz * dx - bfx * dz) * b.off * jimp * ib * 0.16, -5, 5);
           const impact = -vn;
-          A.damage(Math.max(0, impact - 6) * 1.6 * (B.p.mass / A.p.mass));
-          B.damage(Math.max(0, impact - 6) * 1.6 * (A.p.mass / B.p.mass));
+          const hurt = impactDamage(impact) * DAMAGE.otherCar;
+          // a police car hitting you hits harder than one bumping traffic
+          A.damage(hurt * massFactor(A.p.mass, B.p.mass) * (B.isCop && !A.isCop ? DAMAGE.policeRam / DAMAGE.otherCar : 1));
+          B.damage(hurt * massFactor(B.p.mass, A.p.mass) * (A.isCop && !B.isCop ? DAMAGE.policeRam / DAMAGE.otherCar : 1));
           if (impact > 2.5) impacts.push({ v: A, other: B, impact, x: (a.x + b.x) / 2, y: A.pos.y + 0.7, z: (a.z + b.z) / 2, nx: dx, nz: dz });
         }
     }

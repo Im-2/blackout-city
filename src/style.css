@@ -52,6 +52,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; ove
 .speed .num { font-size: 52px; line-height: 0.9; color: #fff1d0; }
 .speed .bar { height: 8px; background: #0b1016; border: 1px solid #22303d; margin-top: 6px; }
 .speed .fill { height: 100%; background: var(--sage); }
+.speed .fill.mid { background: var(--amber); }
 .speed .fill.low { background: var(--red); animation: blink 0.4s steps(2) infinite; }
 
 .minimap { left: 18px; bottom: 18px; width: 200px; height: 200px; image-rendering: pixelated; }
@@ -183,10 +184,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0f141c; ove
 .m-timer b { font-weight: normal; color: #fff1d0; font-size: 30px; margin-right: 8px; }
 .m-timer b.low { color: #ff5a4a; animation: blink 0.5s steps(2) infinite; }
 .m-timer span { color: #ffd24a; }
-.mission-card { left: 50%; top: 30%; transform: translateX(-50%); width: min(460px, 86vw); padding: 12px 18px; border-left: 6px solid var(--amber); }
-.mission-card .c-title { font-size: 44px; line-height: 1; color: #fff1d0; margin: 4px 0 0; }
+.mission-card, .info-card { left: 50%; top: 30%; transform: translateX(-50%); width: min(460px, 86vw); padding: 12px 18px; border-left: 6px solid var(--amber); }
+.mission-card .c-title, .info-card .c-title { font-size: 44px; line-height: 1; color: #fff1d0; margin: 4px 0 0; }
 .mission-card .c-giver { font-size: 18px; color: var(--dim); margin-bottom: 8px; }
-.mission-card .c-intro { font-size: 20px; line-height: 1.1; text-transform: none; margin-bottom: 10px; }
+.mission-card .c-intro, .info-card .c-intro { font-size: 20px; line-height: 1.1; text-transform: none; margin-bottom: 10px; }
 .fullmap { position: absolute; inset: 0; pointer-events: auto; background: #16303c; cursor: crosshair; }
 .fullmap canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
 .map-tip { position: absolute; left: 0; top: 0; z-index: 2; max-width: 300px; padding: 6px 10px; background: var(--panel); border: 2px solid var(--line); font-size: 18px; line-height: 1.05; text-transform: none; pointer-events: none; display: none; }
@@ -318,7 +319,6 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
 #ui.touch .radio { left: 8px; bottom: auto; top: 150px; max-width: 34vw; }
 #ui.touch .speed { right: 8px; bottom: auto; top: 88px; }
 #ui.touch .escapes { display: none !important; }
-#ui.touch .prompt { bottom: auto; top: 60px; font-size: 19px; max-width: 46vw; }
 #ui.touch .energy { bottom: 4px; width: 200px; padding: 2px 8px 3px; }
 #ui.touch .energy .label { display: none; }
 #ui.touch .energy .bar { height: 7px; margin: 0; }
@@ -362,10 +362,10 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
   .speed .num { font-size: 26px; }
   .speed .label { font-size: 10px; }
   .speed .bar { height: 5px; margin-top: 2px; }
-  .mission-card { top: 22%; width: min(380px, 50vw); padding: 5px 10px; }
-  .mission-card .c-title { font-size: 26px; }
+  .mission-card, .info-card { top: 22%; width: min(380px, 50vw); padding: 5px 10px; }
+  .mission-card .c-title, .info-card .c-title { font-size: 26px; }
   .mission-card .c-giver { font-size: 13px; margin-bottom: 3px; }
-  .mission-card .c-intro { font-size: 14px; margin-bottom: 3px; }
+  .mission-card .c-intro, .info-card .c-intro { font-size: 14px; margin-bottom: 3px; }
   .phone { top: 60px; left: 26vw; width: 46vw; font-size: 15px; padding: 3px 8px; }
   .phone .brief { font-size: 13px; margin: 2px 0; }
   .taxi { top: 50px; }
@@ -407,7 +407,6 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
   .map-tip { font-size: 14px; max-width: 220px; }
   #ui.touch .minimap { width: 92px; height: 92px; left: 6px; top: 6px; }
   #ui.touch .objective { left: 104px; top: 6px; }
-  #ui.touch .prompt { top: 44px; font-size: 15px; padding: 1px 8px; }
   #ui.touch .speed { top: 58px; right: 6px; }
   #ui.touch .radio { top: 104px; left: 6px; font-size: 13px; padding: 2px 6px; }
   .tc-btn { font-size: 13px; }
@@ -446,3 +445,84 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
   .tail-hud { left: auto; right: 6px; top: 52px; transform: none; width: 180px; }
   #ui.touch .hintbox { top: auto; bottom: 34px; right: auto; left: 8px; max-width: 42vw; }
 }
+
+/* ---- touch text: everything scales with screen height, inside limits ---- */
+#ui.touch {
+  --t-body: clamp(12px, 3.4vh, 17px);
+  --t-small: clamp(10px, 2.8vh, 14px);
+  --t-head: clamp(14px, 4.6vh, 24px);
+  --t-title: clamp(18px, 7vh, 36px);
+}
+#ui.touch .label, #ui.touch .status, #ui.touch .obj-sub, #ui.touch .job, #ui.touch .ms-sub, #ui.touch .ms-status, #ui.touch .hu-sub, #ui.touch .credits, #ui.touch .ctl-sub { font-size: var(--t-small); letter-spacing: 1px; }
+#ui.touch .obj-main { font-size: var(--t-body); line-height: 1.05; }
+#ui.touch .money, #ui.touch .m-timer, #ui.touch .r-row, #ui.touch .t-state, #ui.touch .mg-info { font-size: var(--t-body); }
+#ui.touch .m-timer b { font-size: var(--t-head); }
+#ui.touch .money em, #ui.touch .money span { font-size: var(--t-small); }
+#ui.touch .objective { max-width: 32vw; }
+#ui.touch .obj-main, #ui.touch .obj-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+#ui.touch .speed .num { font-size: var(--t-title); }
+
+/* the prompt sits low, clear of the buttons, and never takes a touch */
+#ui.touch .prompt { left: 46%; bottom: 22px; top: auto; max-width: 38vw; width: max-content; box-sizing: border-box; padding: 1px 8px; text-align: center; font-size: clamp(13px, 3.8vh, 19px); line-height: 1.05; pointer-events: none; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+#ui.touch .energy { left: 46%; }
+#ui.touch .hintbox { top: auto; bottom: 8px; left: 8px; right: auto; max-width: 25vw; max-height: 15vh; overflow: hidden; padding: 2px 6px; font-size: var(--t-small); line-height: 1.05; }
+#ui.touch .radio { max-width: 28vw; max-height: 22vh; overflow: hidden; padding: 2px 6px; font-size: var(--t-small); line-height: 1.05; }
+#ui.touch .toasts { top: 16%; left: 46%; width: 50vw; }
+#ui.touch .toast { font-size: var(--t-head); letter-spacing: 1px; max-width: 50vw; padding: 1px 8px; }
+#ui.touch .toast.win { font-size: var(--t-title); }
+#ui.touch .toast.dim { font-size: var(--t-body); }
+#ui.touch .district-banner { font-size: var(--t-head); letter-spacing: 3px; top: 12%; left: 46%; }
+#ui.touch .bust .txt, #ui.touch .sus .txt { font-size: var(--t-body); }
+#ui.touch .marker .dist, #ui.touch .witness .wi, #ui.touch .ped-say, #ui.touch .hack-icon .ht, #ui.touch .hack-icon .hc { font-size: var(--t-small); }
+#ui.touch .hack-icon .hl, #ui.touch .hack-icon.sel .ht { font-size: var(--t-body); }
+#ui.touch .trick-feed { font-size: var(--t-body); }
+#ui.touch .trick-combo { bottom: 44px; left: 46%; }
+#ui.touch .trick-combo span { font-size: var(--t-body); }
+#ui.touch .trick-combo b { font-size: var(--t-head); }
+#ui.touch .r-pos { font-size: var(--t-title); }
+#ui.touch .r-pos small { font-size: var(--t-body); }
+#ui.touch .race-count { font-size: clamp(44px, 18vh, 90px); }
+#ui.touch .phone { font-size: var(--t-body); max-height: 70vh; overflow: hidden; }
+#ui.touch .phone .brief { font-size: var(--t-small); }
+
+/* first-visit card: small, low, gone on a tap or after a few seconds */
+#ui.touch .info-card { left: 46%; top: auto; bottom: clamp(58px, 11vh, 84px); width: max-content; max-width: 40vw; max-height: 15vh; box-sizing: border-box; overflow: hidden; padding: 2px 8px; border-left-width: 4px; pointer-events: auto; touch-action: none; z-index: 5; }
+#ui.touch .info-card .label { display: none; }
+#ui.touch .info-card .c-title { font-size: var(--t-body); line-height: 1; color: #fff1d0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ui.touch .info-card .c-intro { font-size: var(--t-small); line-height: 1.05; margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+
+/* mission card: may be larger, but it fits and scrolls, and START sits in the buttons beside it */
+#ui.touch .mission-card { left: 36%; top: 50%; transform: translate(-50%, -50%); width: min(460px, 56vw); max-height: calc(100% - 16px); box-sizing: border-box; overflow-y: auto; padding: 6px 10px; pointer-events: auto; touch-action: pan-y; z-index: 5; }
+#ui.touch .mission-card .c-title { font-size: var(--t-title); }
+#ui.touch .mission-card .c-giver { font-size: var(--t-small); margin-bottom: 3px; }
+#ui.touch .mission-card .c-intro { font-size: var(--t-body); margin-bottom: 2px; }
+#ui.touch .c-close { float: right; font: inherit; font-size: var(--t-head); line-height: 1; min-width: 34px; min-height: 30px; margin: 0 0 2px 6px; background: #1a2230; color: #e8e2d0; border: 2px solid var(--line); }
+
+/* screens and menus */
+#ui.touch .logo { font-size: clamp(24px, 10vh, 64px); letter-spacing: 3px; }
+#ui.touch .logo span { letter-spacing: 12px; margin-right: -12px; }
+#ui.touch .logo.big { font-size: clamp(36px, 13vh, 110px); }
+#ui.touch .tagline { font-size: var(--t-head); letter-spacing: 3px; }
+#ui.touch .btn { font-size: clamp(15px, 5vh, 26px); padding: 3px 14px; }
+#ui.touch .stats { font-size: var(--t-body); }
+#ui.touch .stats td { padding: 0 10px; }
+#ui.touch .lmsg, #ui.touch .ctl-grid, #ui.touch .tc-panel { font-size: var(--t-body); }
+#ui.touch .tcp-row button { font-size: var(--t-small); }
+#ui.touch .home-ui { width: min(600px, 88vw); max-height: calc(100% - 12px); box-sizing: border-box; font-size: var(--t-body); padding: 4px 10px; }
+#ui.touch .hu-head { font-size: var(--t-title); align-items: center; padding-bottom: 2px; }
+#ui.touch .hu-head b { font-size: var(--t-head); }
+#ui.touch .hu-tab { font-size: var(--t-small); padding: 2px 6px; min-height: 26px; }
+#ui.touch .hu-foot { display: none; }
+#ui.touch .hu-close, #ui.touch .ms-close { font-size: var(--t-head); min-width: 34px; min-height: 28px; }
+#ui.touch .map-side { width: clamp(210px, 33vw, 340px); font-size: var(--t-body); }
+#ui.touch .ms-head { font-size: var(--t-head); letter-spacing: 2px; padding: 2px 8px 1px; }
+#ui.touch .ms-tabs button, #ui.touch .ms-sort, #ui.touch .ms-key { font-size: var(--t-small); padding: 1px 5px; }
+#ui.touch .ms-search { font-size: var(--t-small); }
+#ui.touch .ms-name { font-size: var(--t-body); }
+#ui.touch .ms-act { font-size: var(--t-small); }
+#ui.touch .ms-act .btn { font-size: var(--t-body); }
+#ui.touch .ms-hint { font-size: var(--t-small); }
+#ui.touch .map-tip { font-size: var(--t-small); max-width: 34vw; }
+#ui.touch .map-help { display: none; }
+#ui.touch .tc-btn { font-size: clamp(11px, 3.4vh, 15px); }
+#ui.touch .tc-btn.big { font-size: clamp(13px, 4vh, 18px); }

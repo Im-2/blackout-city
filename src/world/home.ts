@@ -610,6 +610,7 @@ export class Home {
       v.place(Home.BAY.x, Home.BAY.z, 0);
       v.handbrake = true;
       v.locked = false;
+      v.repair();
       this.car = v;
       g.collection.onPark(v);
       this.refreshDisplays();
@@ -696,7 +697,7 @@ export class Home {
     // park here
     if (v && inGarage && v.speedAbs < 3.5 && !g.carAction) {
       const known = g.save.data.ownedVehicles.some((o) => o.kind === v.kind && o.color === v.color);
-      g.carAction = { label: known ? 'Park it in the garage' : `Park it: add ${v.label.toLowerCase()} to the collection`, action: () => this.park(v) };
+      g.carAction = { label: known ? (v.health < 0.999 ? 'Park it: free repair' : 'Park it in the garage') : `Park and repair: add ${v.label.toLowerCase()} to the collection`, action: () => this.park(v) };
     }
 
     if (!this.inHouse || !this.site.kit) return;

@@ -74,7 +74,7 @@ export class TruckJob {
     v.isCop = false;
     v.isEmergency = false;
     v.driver = 'racer';
-    v.hp = 9000;
+    v.maxHp = v.hp = 9000;
     v.place(a.x, a.z, Math.atan2(b.x - a.x, b.z - a.z));
     g.addVehicle(v);
     this.truck = v;

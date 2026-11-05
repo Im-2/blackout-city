@@ -304,7 +304,7 @@ export class Races {
     if (this.frozen) { v.throttle = 0; v.steer = 0; v.handbrake = true; return; }
     v.handbrake = false;
     // bruised but never out: a race with no rivals left isn't a race
-    if (v.hp < 25) { v.hp = 25; v.wrecked = false; }
+    if (v.health < 0.25) { v.hp = v.maxHp * 0.25; v.wrecked = false; }
     const pv = g.player.worldPos;
     while (r.idx < r.pts.length - 1 && Math.hypot(r.pts[r.idx].x - v.pos.x, r.pts[r.idx].z - v.pos.z) < Math.max(5, v.speedAbs * 0.22)) r.idx++;
     const arc = r.arc[r.idx];

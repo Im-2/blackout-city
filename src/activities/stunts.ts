@@ -103,7 +103,7 @@ export class Stunts {
       signs.sign('HIGH SCORES', L.x0 + 16, CURB_H + 1.8, L.z0 + 3.54, 0, 3.6, 0.6, '#1e2a36', '#ffd27a');
       g.col.add(L.x0 + 14, 0, L.z0 + 3.2, L.x0 + 18, 2.6, L.z0 + 3.5, false, 'board');
       g.interactables.push({ pos: new THREE.Vector3(L.x0 + 16, CURB_H, L.z0 + 4.4), radius: 1.8, label: 'Read the high scores', enabled: () => !g.player.vehicle, action: () => g.homeUi.open(['records'], 'HIGH SCORES') });
-      g.activities.add({ id: 'stunt-park', name: 'Stunt Park', type: 'stunt', x: cx, z: L.z0 + 2, pin: true, intro: 'Ride the park path from the west or east for a run-up at the big gap. Hold F to wheelie, F + S to stoppie. In the air, A/D spins and F + W or S flips. Chain tricks and land straight.' });
+      g.activities.add({ id: 'stunt-park', name: 'Stunt Park', type: 'stunt', x: cx, z: L.z0 + 2, pin: true, intro: 'Ride the park path from the west or east for a run-up at the big gap. Hold F to wheelie, F + S to stoppie. In the air, A/D spins and F + W or S flips. Chain tricks and land straight.', short: 'Run up along the path. In the air: stick spins, TRICK + GAS flips.' });
     }
 
     // ---- Long Jump, block (4,10): run up the path from the west, distance boards after
@@ -118,7 +118,7 @@ export class Stunts {
       }
       signs.sign('LONG JUMP', L.x0 + 3, 4.6, cz, -Math.PI / 2, 6, 1.1, '#2f3b4d', '#ffd27a');
       for (const z of [cz - 3.2, cz + 3.2]) this.b.cbox(L.x0 + 3, 2.2, z, 0.2, 4.4, 0.2, { color: '#3a3c3e' });
-      g.activities.add({ id: 'long-jump', name: 'Long Jump', type: 'stunt', tag: 'J', x: L.x0 + 2, z: cz, intro: 'One long ramp and distance boards. Come along the park path from the west, flat out. Air time scores.' });
+      g.activities.add({ id: 'long-jump', name: 'Long Jump', type: 'stunt', tag: 'J', x: L.x0 + 2, z: cz, intro: 'One long ramp and distance boards. Come along the park path from the west, flat out. Air time scores.', short: 'Flat out off the ramp. Air time scores.' });
     }
 
     // ---- Shore Leap, block (3,11): run up the path from the north, fly at the highway
@@ -129,7 +129,7 @@ export class Stunts {
       for (let i = 0; i < 3; i++) { this.cone(cx - 5, L.z0 + 4 + i * 4); this.cone(cx + 5, L.z0 + 4 + i * 4); }
       signs.sign('SHORE LEAP', cx, 3.8, L.z0 + 2.8, Math.PI, 6, 1.1, '#2f3b4d', '#ffd27a');
       for (const x of [cx - 3.2, cx + 3.2]) this.b.cbox(x, 1.8, L.z0 + 2.8, 0.2, 3.6, 0.2, { color: '#3a3c3e' });
-      g.activities.add({ id: 'shore-leap', name: 'Shore Leap', type: 'stunt', tag: 'J', x: cx, z: L.z0 + 2, intro: 'This one points at the highway. Come down the park path from the north and mind the traffic when you land. Spin on the way over for the big numbers.' });
+      g.activities.add({ id: 'shore-leap', name: 'Shore Leap', type: 'stunt', tag: 'J', x: cx, z: L.z0 + 2, intro: 'This one points at the highway. Come down the park path from the north and mind the traffic when you land. Spin on the way over for the big numbers.', short: 'Ramp over the highway. Spin for big numbers.' });
     }
 
     const m = new THREE.Mesh(this.b.build(), worldMaterials().props);

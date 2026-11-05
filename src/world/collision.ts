@@ -80,8 +80,8 @@ export class Collision {
    * Boxes with top <= feetY + step are ignored (can be stepped onto).
    * Returns accumulated push normal (nx, nz) and count of hits.
    */
-  resolveCircle(p: { x: number; z: number }, r: number, feetY: number, step: number, headY: number, minTop = 0, occludersOnly = false): { nx: number; nz: number; hits: number; depth: number } {
-    const res = { nx: 0, nz: 0, hits: 0, depth: 0 };
+  resolveCircle(p: { x: number; z: number }, r: number, feetY: number, step: number, headY: number, minTop = 0, occludersOnly = false): { nx: number; nz: number; hits: number; depth: number; solid: boolean } {
+    const res = { nx: 0, nz: 0, hits: 0, depth: 0, solid: false };
     const boxes = this.query(p.x - r, p.z - r, p.x + r, p.z + r, this.tmp);
     for (const b of boxes) {
       if (b.maxY <= feetY + step || b.minY >= headY || b.maxY < minTop || (occludersOnly && !b.occluder)) continue;
@@ -105,6 +105,7 @@ export class Collision {
       p.x += dx * pen;
       p.z += dz * pen;
       res.nx += dx; res.nz += dz; res.hits++;
+      if (b.occluder) res.solid = true; // a wall, not a pole
       res.depth = Math.max(res.depth, pen);
     }
     if (res.hits) {

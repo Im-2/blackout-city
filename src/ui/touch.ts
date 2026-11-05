@@ -70,7 +70,7 @@ export class TouchControls {
     rot.innerHTML = '<div class="logo">BLACKOUT<span>CITY</span></div><div class="rot-phone"></div><div class="lmsg">PLEASE ROTATE YOUR DEVICE</div>';
     document.body.appendChild(rot);
     // the page must not scroll, zoom or bounce; only real lists may scroll
-    document.addEventListener('touchmove', (e) => { if (!(e.target as HTMLElement).closest?.('.ms-list, .hu-list, .tc-panel, .screen')) e.preventDefault(); }, { passive: false });
+    document.addEventListener('touchmove', (e) => { if (!(e.target as HTMLElement).closest?.('.ms-list, .hu-list, .tc-panel, .screen, .mission-card')) e.preventDefault(); }, { passive: false });
     document.addEventListener('gesturestart', (e) => e.preventDefault());
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     // first touch: sound, fullscreen, landscape. These all need a user gesture.

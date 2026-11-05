@@ -37,6 +37,8 @@ export interface SaveData {
 }
 
 const KEY = 'blackoutcity.save.v1';
+/** intro cards you've read: kept apart so they never come back, even without sleeping */
+const SEEN_KEY = 'blackoutcity.seen.v1';
 
 const fresh = (): SaveData => ({
   cash: 0,
@@ -68,11 +70,18 @@ export class Save {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) this.data = { ...fresh(), ...JSON.parse(raw) };
+      const seen = localStorage.getItem(SEEN_KEY);
+      if (seen) Object.assign(this.data.seen, JSON.parse(seen));
     } catch { /* storage blocked: progress lasts for the session */ }
   }
 
   commit() {
     try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* ignore */ }
+  }
+
+  markSeen(id: string) {
+    this.data.seen[id] = true;
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(this.data.seen)); } catch { /* ignore */ }
   }
 
   get hasProgress() {
@@ -82,6 +91,7 @@ export class Save {
   wipe() {
     this.data = fresh();
     this.commit();
+    try { localStorage.removeItem(SEEN_KEY); } catch { /* ignore */ }
   }
 
   /** count an escape method (subway/garage/rooftop/sewer/hide) for adaptive police */

@@ -59,6 +59,7 @@ export class GetawayJob {
   private rng = new Rng(3131);
   private sayT = 0;
   private boardT = 0;
+  /** share of a car's health lost, summed across cars */
   private hpLost = 0;
   private lastCar: Vehicle | null = null;
   private lastHp = 0;
@@ -207,10 +208,10 @@ export class GetawayJob {
     if (this.aboard && pv) {
       if (this.lastCar !== pv) { this.lastCar = pv; this.lastHp = pv.hp; }
       if (pv.hp < this.lastHp) {
-        const lost = this.lastHp - pv.hp;
+        const lost = (this.lastHp - pv.hp) / pv.maxHp;
         this.hpLost += lost;
         this.lastHp = pv.hp;
-        if (lost > 4) { this.say('impact', true); for (const c of this.crew) c.cheer = 0.9; }
+        if (lost > 0.02) { this.say('impact', true); for (const c of this.crew) c.cheer = 0.9; }
       }
       const hot = g.police.heat > 0 && g.police.lastSeenT < 3;
       if (hot) { this.wasHot = true; if (this.rng.next() < dt * 0.15) this.say('chased'); }
@@ -251,7 +252,7 @@ export class GetawayJob {
     const d = this.def!, g = this.g;
     const time = g.time - this.boardT;
     const speed = Math.max(0, Math.min(40, 40 * (1 - (time - d.par) / (d.par * 1.5))));
-    const clean = Math.max(0, 30 * (1 - this.hpLost / 60));
+    const clean = Math.max(0, 30 * (1 - this.hpLost / 0.35));
     const heatT = this.lostAt < 0 ? (this.wasHot ? time : 0) : this.lostAt;
     const escape = Math.max(0, Math.min(30, 30 * (1 - heatT / (d.par * 1.2))));
     const total = Math.round(speed + clean + escape);
@@ -269,7 +270,7 @@ export class GetawayJob {
   summary(): [string, string][] {
     const s = this.score;
     if (!s) return [];
-    return [['RATING', `${s.rank} (${s.total}/100)`], ['DRIVE TIME', `${s.time.toFixed(1)}s`], ['DAMAGE', `${Math.round(s.hp)}`], ['HEAT LOST IN', s.heat ? `${s.heat.toFixed(1)}s` : 'NEVER HOT']];
+    return [['RATING', `${s.rank} (${s.total}/100)`], ['DRIVE TIME', `${s.time.toFixed(1)}s`], ['DAMAGE', `${Math.round(s.hp * 100)}%`], ['HEAT LOST IN', s.heat ? `${s.heat.toFixed(1)}s` : 'NEVER HOT']];
   }
 }
 

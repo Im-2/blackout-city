@@ -52,6 +52,8 @@ import { Races } from '../activities/races';
 import { Reputation } from '../reputation/reputation';
 import { Records } from '../save/records';
 import { Places } from '../map/places';
+import { DAMAGE } from '../vehicles/damage';
+import { Repair } from '../activities/repair';
 import { Minigame } from '../ui/minigame';
 import { TruckJob } from '../activities/truck';
 import { GetawayJob } from '../activities/getaway';
@@ -121,6 +123,7 @@ export class Game {
   rep!: Reputation;
   records = new Records();
   places = new Places(this);
+  repair!: Repair;
   minigame!: Minigame;
   truck!: TruckJob;
   getaway!: GetawayJob;
@@ -229,6 +232,7 @@ export class Game {
     this.travel = new FastTravel(this).build();
     this.stunts = new Stunts(this).build();
     this.bikes = new Bikes(this).build();
+    this.repair = new Repair(this).build();
     this.tricks = new Tricks(this);
     this.races = new Races(this);
     this.minigame = new Minigame(this);
@@ -448,8 +452,7 @@ export class Game {
     }
     const rx = Math.cos(heading), rz = -Math.sin(heading);
     ga.place(base.x + rx * 3.2, base.z + rz * 3.2, heading);
-    ga.hp = 100;
-    ga.wrecked = false;
+    ga.repair();
   }
 
   /** places the clip keys [ and ] teleport between */
@@ -653,6 +656,7 @@ export class Game {
     this.jobs.update(dt);
     this.world.update(dt);
     this.home.update(dt, realDt);
+    this.repair.update();
     this.updateFade(realDt);
     this.news.update(realDt);
     this.hack.update(realDt, dt);
@@ -675,10 +679,11 @@ export class Game {
     if (pv) this.routes.record(pv.pos.x, pv.pos.z, pv.speedAbs * dt, dt);
     // damaged cars smoke, wrecks burn
     for (const v of this.vehicles) {
-      if (v.hp < 40 && Math.random() < (v.wrecked ? 0.5 : 0.2) * dt * 60 * 0.3) {
+      const hp = v.health;
+      if (hp < DAMAGE.smokeBelow && Math.random() < (v.wrecked ? 0.5 : hp < DAMAGE.fireBelow ? 0.45 : 0.25) * dt * 60 * 0.3) {
         const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
         const p = new THREE.Vector3(v.pos.x + fx * 1.6, v.pos.y + 1.1, v.pos.z + fz * 1.6);
-        this.fx.spawn(v.wrecked && Math.random() < 0.5 ? 'fire' : 'smoke', p, 1);
+        this.fx.spawn((v.wrecked || hp < DAMAGE.fireBelow) && Math.random() < 0.5 ? 'fire' : 'smoke', p, 1);
       }
     }
     this.fx.update(dt);
@@ -697,7 +702,7 @@ export class Game {
     this.env.follow(this.player.worldPos, this.time);
     this.audio.listener.copy(this.player.worldPos);
     this.audio.update(realDt, { car: pv, sirenDist: this.police.nearestSiren(this.player.worldPos), hack: this.hack.active, time: this.time });
-    this.post.damage = damp(this.post.damage, pv ? Math.max(0, (40 - pv.hp) / 40) * 0.6 : 0, 3, realDt) + this.police.bust * 0.5 * (1 - this.post.damage);
+    this.post.damage = damp(this.post.damage, pv ? Math.max(0, (DAMAGE.smokeBelow - pv.health) / DAMAGE.smokeBelow) * 0.6 : 0, 3, realDt) + this.police.bust * 0.5 * (1 - this.post.damage);
     this.hud.update(realDt, this);
     void inp;
   }

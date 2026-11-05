@@ -122,7 +122,7 @@ export class Collection {
       const d = Math.hypot(s.x - P.x, s.z - P.z);
       if (d < SPOT_R && !seen[s.car.id]) {
         seen[s.car.id] = true;
-        g.activities.showCard({ name: s.car.name, type: 'rare', intro: `A rare car, now marked on your map. Pick the lock, then drive it into your garage and park it to keep it. ${s.car.hint}.` });
+        g.activities.showCard({ name: s.car.name, type: 'rare', intro: `A rare car, now marked on your map. Pick the lock, then drive it into your garage and park it to keep it. ${s.car.hint}.`, short: 'Rare car. Pick the lock, park it at home to keep it.' });
       }
       const v = s.v;
       if (v) {

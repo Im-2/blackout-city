@@ -22,6 +22,9 @@ export function touchText(s: string) {
   if (!device.touch) return s;
   return s
     .replace(/\[E\]\s*/g, '')
+    .replace(/ \(or hold E to pick the lock\)/g, '')
+    .replace(/Hold E: pick lock — /g, 'Hold to pick: ')
+    .replace(/and press E to/g, 'and tap USE to')
     .replace(/Hold Q: click = green, right-click = red/g, 'Hold HACK: RUN IT = green, ALT = red')
     .replace(/[Cc]lick a light for green, right-click for red/g, 'RUN IT for green, ALT for red')
     .replace(/then press E/g, 'then tap ACTION')

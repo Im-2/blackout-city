@@ -351,6 +351,7 @@ export class Missions {
         continue;
       }
       this.card = d;
+      g.hud.cardClose = () => this.declineCard();
       g.hud.missionCard(d);
       g.audio.ring();
       return;
@@ -365,10 +366,15 @@ export class Missions {
       g.hud.missionCard(null);
       this.start(d);
     } else if (inp.pressed('back', 'abandon')) {
-      this.card = null;
-      g.hud.missionCard(null);
-      this.cooldown.add(d.id);
+      this.declineCard();
     }
+  }
+
+  private declineCard() {
+    if (!this.card) return;
+    this.cooldown.add(this.card.id);
+    this.card = null;
+    this.g.hud.missionCard(null);
   }
 
   private drawMarkers() {

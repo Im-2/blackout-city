@@ -74,10 +74,10 @@ export class Places {
     }
     for (const s of STATIC) out.push(base({ ...s, status: s.status ?? 'Available', locked: !!s.locked, pin: s.id === 'home' }));
     for (const s of g.activities.spots) {
-      const bike = s.type === 'bike';
+      const bike = s.type === 'bike' || s.type === 'repair';
       out.push(base({
         id: s.id, name: s.name, desc: s.intro, category: bike ? 'service' : 'activity',
-        icon: bike ? (s.tag === '$' ? 'wheelpay' : 'wheel') : 'ramp', color: g.activities.iconColor(s), tag: s.tag,
+        icon: s.icon ?? (bike ? (s.tag === '$' ? 'wheelpay' : 'wheel') : 'ramp'), color: g.activities.iconColor(s), tag: s.tag,
         prio: bike ? PRIO.minor : PRIO.activity, x: s.x, z: s.z, pin: !!s.pin,
       }));
     }

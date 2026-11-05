@@ -62,8 +62,8 @@ export class Bikes {
       g.col.addCentered(sx, z, 0.2, 0.2, 3, 0, false, 'pole');
       const d = DISTRICTS[districtOfBlock(bi, bj)].name;
       g.activities.add(rental
-        ? { id: `rent-${bi}-${bj}`, name: `Bike rental, ${d}`, type: 'bike', tag: '$', x: x + 3, z, intro: 'Rent a motorbike ($40), scooter ($20) or bicycle ($8). Press E on the one you want. Broke? Hold E and pick the lock, if nobody is looking.' }
-        : { id: `rack-${bi}-${bj}`, name: `Bike parking, ${d}`, type: 'bike', x: x + 3, z, intro: 'Free bicycles. Nobody locks them around here. On any bike, hold F for a wheelie, or F + S for a stoppie.' });
+        ? { id: `rent-${bi}-${bj}`, name: `Bike rental, ${d}`, type: 'bike', tag: '$', x: x + 3, z, intro: 'Rent a motorbike ($40), scooter ($20) or bicycle ($8). Press E on the one you want. Broke? Hold E and pick the lock, if nobody is looking.', short: 'Tap ACTION on a bike to rent it. Broke? Hold to pick the lock.' }
+        : { id: `rack-${bi}-${bj}`, name: `Bike parking, ${d}`, type: 'bike', x: x + 3, z, intro: 'Free bicycles. Nobody locks them around here. On any bike, hold F for a wheelie, or F + S for a stoppie.', short: 'Free bicycles. Hold TRICK for a wheelie.' });
     };
     for (const [bi, bj] of RACKS) place(bi, bj, false);
     for (const [bi, bj] of RENTALS) place(bi, bj, true);

@@ -80,6 +80,10 @@ export class Hud {
   private objLabel: HTMLDivElement;
   private timerEl: HTMLDivElement;
   private cardEl: HTMLDivElement;
+  private infoEl: HTMLDivElement;
+  private infoTap: (() => void) | null = null;
+  /** the card's ✕ on touch */
+  cardClose: (() => void) | null = null;
   private taxiEl: HTMLDivElement;
   private bannerEl: HTMLDivElement;
   private bannerT = 0;
@@ -113,7 +117,11 @@ export class Hud {
     this.bannerEl = h('div', 'district-banner') as HTMLDivElement;
     this.cardEl = h('div', 'panel mission-card') as HTMLDivElement;
     this.cardEl.style.display = 'none';
-    this.hudLayer.append(this.phoneEl, this.escEl, this.taxiEl, this.bannerEl, this.cardEl);
+    this.cardEl.addEventListener('pointerup', (e) => { if ((e.target as HTMLElement).closest('.c-close')) this.cardClose?.(); });
+    this.infoEl = h('div', 'panel info-card') as HTMLDivElement;
+    this.infoEl.style.display = 'none';
+    this.infoEl.addEventListener('pointerup', () => this.infoTap?.());
+    this.hudLayer.append(this.phoneEl, this.escEl, this.taxiEl, this.bannerEl, this.cardEl, this.infoEl);
 
     const heat = h('div', 'panel heat');
     this.heatEl = h('div', 'stars') as HTMLDivElement;
@@ -248,22 +256,25 @@ export class Hud {
     const t = TYPE_INFO[d.type];
     this.cardEl.style.borderLeftColor = t.color;
     this.cardEl.innerHTML = `
+      ${device.touch ? '<button class="c-close">✕</button>' : ''}
       <div class="label" style="color:${t.color}">${t.label} · ${DISTRICTS[d.district].name}</div>
       <div class="c-title">${d.title}</div>
       <div class="c-giver">${d.giver}</div>
-      <div class="c-intro">${d.intro}</div>
+      <div class="c-intro">${touchText(d.intro)}</div>
       ${device.touch ? '' : '<div class="label">[E] START · [BACKSPACE] NOT NOW</div>'}`;
   }
 
   /** a first-visit card for an activity spot (it doesn't stop you) */
-  infoCard(s: { name: string; type: keyof typeof TYPE_INFO; intro: string }) {
+  infoCard(s: { name: string; type: keyof typeof TYPE_INFO; intro: string; short?: string } | null, onTap: (() => void) | null = null) {
+    this.infoEl.style.display = s ? 'block' : 'none';
+    this.infoTap = onTap;
+    if (!s) return;
     const t = TYPE_INFO[s.type];
-    this.cardEl.style.display = 'block';
-    this.cardEl.style.borderLeftColor = t.color;
-    this.cardEl.innerHTML = `
+    this.infoEl.style.borderLeftColor = t.color;
+    this.infoEl.innerHTML = `
       <div class="label" style="color:${t.color}">${t.label}</div>
       <div class="c-title">${s.name}</div>
-      <div class="c-intro">${touchText(s.intro)}</div>`;
+      <div class="c-intro">${device.touch ? s.short ?? touchText(s.intro) : s.intro}</div>`;
   }
 
   /** somebody talking to you, in the radio slot */
@@ -351,9 +362,11 @@ export class Hud {
     this.speedEl.style.display = v ? 'block' : 'none';
     if (v) {
       this.speedNum.textContent = String(Math.round(Math.abs(v.speed) * 3.6));
-      this.vehEl.textContent = `KM/H · ${v.label}`;
-      this.hpFill.style.width = `${v.hp}%`;
-      this.hpFill.classList.toggle('low', v.hp < 35);
+      this.vehEl.textContent = `KM/H · ${v.label} · ${Math.ceil(v.health * 100)}%`;
+      const hp = v.health;
+      this.hpFill.style.width = `${hp * 100}%`;
+      this.hpFill.classList.toggle('low', hp < 0.3);
+      this.hpFill.classList.toggle('mid', hp >= 0.3 && hp < 0.6);
     }
 
     // prompt

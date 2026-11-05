@@ -183,7 +183,7 @@ export class Traffic {
     ai.phase = 'edge'; ai.pts = loc.pts; ai.idx = loc.k + 1; ai.crashedT = 0; ai.stuckT = 0; ai.lane = LANE;
     const p = loc.pts[loc.k], n = loc.pts[loc.k + 1];
     v.place(p.x, p.z, Math.atan2(n.x - p.x, n.z - p.z));
-    v.hp = 100; v.wrecked = false;
+    v.repair();
     v.vx = Math.sin(v.heading) * ai.cruise * 0.8;
     v.vz = Math.cos(v.heading) * ai.cruise * 0.8;
   }
