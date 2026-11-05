@@ -2,7 +2,7 @@
 // reputation, upgrades), wardrobe, stash, trophies. Pauses the world while up.
 import { TYPE_INFO } from '../missions/types';
 import { DISTRICTS, District } from '../map/districts';
-import { OUTFITS } from '../player/disguise';
+import { describe, lookSig } from '../player/clothes';
 import { UPGRADES } from '../core/economy';
 import { Races } from '../activities/races';
 import { BILLBOARD_PRESETS, cleanMessage } from '../activities/pranks';
@@ -16,7 +16,7 @@ interface Row { left: string; right?: string; sub?: string; color?: string; act?
 
 const TAB_NAMES: Record<HomeTab, string> = {
   missions: 'MISSIONS', map: 'MAP', collection: 'COLLECTION', rep: 'REPUTATION', upgrades: 'UPGRADES',
-  wardrobe: 'OUTFITS', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS', billboard: 'MESSAGE', gallery: 'GALLERY',
+  wardrobe: 'WARDROBE', stash: 'STASH', trophies: 'TROPHIES', records: 'RECORDS', billboard: 'MESSAGE', gallery: 'GALLERY',
 };
 
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -157,11 +157,17 @@ export class HomeUi {
           const lvl = s.upgrades[u.id], cost = u.cost[lvl];
           return { left: u.name, right: cost === undefined ? 'MAXED' : `LV ${lvl} · $${cost.toLocaleString()}`, act: cost === undefined ? undefined : () => g.shop.buy(u.id) };
         });
-      case 'wardrobe':
-        return OUTFITS.map((o) => {
-          const owned = g.disguise.owned.has(o.id), on = g.disguise.current.id === o.id;
-          return { left: o.name, right: on ? 'WEARING' : owned ? 'WEAR' : `$${o.price} AT PAWN & LOAN`, sub: `Witnesses will say: ${o.desc}`, color: owned ? o.skin.top : '#6a6f78', act: owned && !on ? () => g.disguise.wear(o.id) : undefined };
-        });
+      case 'wardrobe': {
+        const D = g.disguise;
+        const rows: Row[] = s.outfitSlots.flatMap((o, i) => (o ? [{
+          left: `Slot ${i + 1}: ${describe(o.look)}`, right: lookSig(o.look) === D.current.id ? 'WEARING' : D.onFile(o.look) ? 'ON THE NEWS' : 'CLEAN',
+          color: '#c8c3b5', act: lookSig(o.look) === D.current.id ? undefined : () => D.wear(o.look),
+        }] : []));
+        return [
+          { left: 'Open the wardrobe', sub: D.knownDesc ? `The radio has you in ${D.knownDesc}.` : 'Nobody has described you yet.', color: '#7dffb0', act: () => { this.close(); g.shopUi.wardrobe(); } },
+          ...rows,
+        ];
+      }
       case 'stash': {
         const total = s.stash.reduce((n, i) => n + i.value, 0);
         const rows: Row[] = s.stash.map((i) => ({ left: i.name, right: `$${i.value.toLocaleString()}` }));

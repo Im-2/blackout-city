@@ -54,6 +54,7 @@ import { Records } from '../save/records';
 import { Places } from '../map/places';
 import { DAMAGE } from '../vehicles/damage';
 import { Repair } from '../activities/repair';
+import { ShopUi } from '../ui/shopui';
 import { Minigame } from '../ui/minigame';
 import { TruckJob } from '../activities/truck';
 import { GetawayJob } from '../activities/getaway';
@@ -134,6 +135,7 @@ export class Game {
   routeLine: { x: number; z: number }[] | null = null;
   touch: TouchControls | null = null;
   homeUi!: HomeUi;
+  shopUi!: ShopUi;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
   private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean; mid?: () => void } | null = null;
@@ -245,6 +247,7 @@ export class Game {
     this.missions = new Missions(this);
     this.map = new FullMap(this);
     this.homeUi = new HomeUi(this);
+    this.shopUi = new ShopUi(this);
     if (device.touch) this.touch = new TouchControls(this);
     this.hack.build();
     this.heist = new Heist(this);
@@ -575,7 +578,7 @@ export class Game {
     if (inp.pressed('escape') && this.state === 'paused') this.resume();
     else if (inp.pressed('pause') && this.state === 'playing') { this.input.unlock(); this.pause(); }
     if (this.state === 'map') this.map.update(realDt);
-    else if (this.state === 'menu') this.homeUi.update();
+    else if (this.state === 'menu') { if (this.shopUi.open_) this.shopUi.update(realDt); else this.homeUi.update(); }
     else if (inp.pressed('map') && (this.state === 'playing' || this.state === 'paused')) this.map.show(this.state);
 
     if (this.hud.root.dataset.state !== this.state) this.hud.root.dataset.state = this.state;

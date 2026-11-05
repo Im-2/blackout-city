@@ -70,6 +70,7 @@ src/
     streetlife.ts         carts, ATMs, bus stops, cell towers, vents, crowd spots
     interior.ts           Kit: modular rooms/props/colliders/surfaces, streamable
     buildings.ts          enterable buildings, ladders, ziplines, per-site alarms
+    stores.ts             clothes stores, barber, corner shops, food stands
     home.ts               the player's home + garage: baked lighting, furniture, TV, displays, parking
   characters/
     skins.ts              colour/detail specs from the reference sheets
@@ -78,7 +79,8 @@ src/
   player/
     player.ts             on-foot controller (walk/run/vault/interact)
     camera.ts             third-person + vehicle camera rig, shake, FOV kick
-    disguise.ts           outfits; police remember the last one they saw
+    clothes.ts            every clothing item, haircut and snack; Look -> Skin
+    disguise.ts           what you wear vs what police and news have on file
   vehicles/
     vehicle.ts            arcade car physics, damage, collision
     carMesh.ts            boxy sedan / cruiser / van meshes
@@ -124,6 +126,7 @@ src/
   map/places.ts           every place on the map in one list: icon, colour, priority, status
   ui/mapicons.ts          the icon shapes, shared by full map, location list, minimap
   ui/fullmap.ts           full map (M): decluttered markers + LOCATIONS panel, waypoint
+  ui/shopui.ts            shop + wardrobe screen: list beside a live view of the player
   ui/homeui.ts            home screens: hacker desk tabs, gallery, wardrobe, stash, trophies, billboard text
   ui/minigame.ts          the timed hit-the-green minigame (E, Enter, click or tap)
   ui/news.ts              radio lines + billboard ticker
@@ -219,7 +222,7 @@ Everything below is a `MissionDef` (or a place), so markers, map, minimap, LOCAT
 
 ## Vehicle damage (`vehicles/damage.ts`)
 - **Tune everything in `DAMAGE` and `HEALTH`.** Damage = `scale × (impact - safeImpact) ^ power`, so scrapes do nothing and high speed hurts a lot. Then: `lightObject` for anything that isn't a building or wall (`resolveCircle` reports `solid`), `otherCar`, `policeRam`, `massFactor`. Inside `cooldown` only the extra force of a harder hit lands.
-- **Hits to wreck, head-on into a building:** sedan 57 at 54 km/h, 12 at 90, 5 at 144. Swat 33 at 90, bus 27. Motorbike 8 at 90. Below 29 km/h nothing. A sedan hitting a pole at 90 takes 72. Hitting a parked sedan at 72 km/h takes 31. A cruiser ramming a sedan at 90 km/h (with `policeRam` 1.6, before it dropped to 1.1): 5. The old numbers were 3 at 90.
+- **Hits to wreck, head-on into a building:** sedan 57 at 54 km/h, 12 at 90, 5 at 144. Swat 33 at 90, bus 27. Motorbike 8 at 90. Below 29 km/h nothing. A sedan hitting a pole at 90 takes 72. Hitting a parked sedan at 72 km/h takes 31. A cruiser ramming a stopped sedan: 31 at 54 km/h, 8 at 90, 4 at 126. The old number was 3 at 90.
 - `v.hp` is in points and `v.maxHp` differs by kind, so read `v.health` (0..1). `v.repair()` restores it. The speed panel shows a bar and a percentage; smoke starts below 40 %, fire below 15 %, engine output fades below 30 % to 72 % at zero.
 - **Wreck fails:** races and the bank heist fail on a wreck. Getaway and truck jobs don't: you swap cars, by the "missions don't track a vehicle" rule. Getaway's clean score now counts share of health lost (35 % = no points).
 - **Repair:** parking at home is free. Four pads (`activities/repair.ts`) cost $25 to $200 by damage and refuse while police can see you.
@@ -230,6 +233,17 @@ Everything below is a `MissionDef` (or a place), so markers, map, minimap, LOCAT
 - **First-visit cards** have their own element (`hud.infoCard`, `.info-card`): small, low, tap or 5 s to dismiss. Give a spot a `short` line for phones. Seen ids go to `blackoutcity.seen.v1` at once (`save.markSeen`), so they don't come back even without sleeping. New Game clears them.
 - **Mission card** fits the safe area, scrolls, and has a ✕ (`hud.cardClose`). START is in the button cluster.
 - **Test tip:** the screenshot tool's `scale` crops instead of scaling. Leave it out.
+
+## Expansion pass 4 ("water, boats, metro, properties, clothing")
+Tag `stable-before-pass4` is the rollback point. Phases: 1 clothing (done), 2 properties, 3 waterfront, 4 visible metro. Each stops for testing. Deploy only when told.
+- **Clothes (`player/clothes.ts`):** an item is a `Partial<Skin>`, in one of 7 slots. A `Look` is one item per slot; `buildSkin(look, hair)` draws it, and the rig caches by the key it builds. Add an item to `ITEMS` and it's on sale. Old saves' whole outfits (`LEGACY`) become items on load.
+- **Where:** THREADS + OLD CUTS block (1,6), MERIDIAN + QUICKSTOP block (7,4), VELVET + CORNER SHOP block (5,8), second-hand at Pawn & Loan. Each block: a two-unit row on the north side, a plain building behind (`world/stores.ts`). Check a new shop door isn't on a mission marker: Hot Parcel's at (-190, 9) drove the Old Town row one block west.
+- **Screen (`ui/shopui.ts`):** the camera moves to whichever direction has the most room and the player turns on the spot, so the preview is the real model. `Section`s of `Row`s, each with a look or hair to preview and a primary and alt action. Toasts don't show in `menu`; messages go in `.shop-msg`. Store walls are drawn unlit (`k.glow`) so shops stay bright at night.
+- **Disguise:** `known` is the outfit last seen, `save.described` everything ever described. Range: same outfit normal, described before 14 m, never described 8 m. Only top, jacket and hat count (`lookSig`). News says "suspect last seen in X". The records hack clears it all (`forget()`).
+- **Wardrobe:** 6 slots (`save.outfitSlots`), each marked CLEAN or ON THE NEWS; "Wear a clean disguise" picks a clean one. In the bedroom and the desk's WARDROBE tab.
+- **Food:** no inventory, you consume it on the spot. Hack energy, or `player.sprintT` (run +15 %). Every street cart sells; one per district is on the map (`minor`).
+- **Saving:** purchases follow the bed rule: in memory until you sleep. Intro cards are the exception.
+- **Activities:** `ActivitySpot` gained `icon`, `color`, `category`, `minor`, so a new shop needs no map code. New icons: hanger, scissors, cup, stand.
 
 ## Testing notes
 - Plain screenshots of the preview pane can return a stale image; `zoom` over the full region captures a fresh frame.

@@ -55,7 +55,7 @@ export class Reputation {
       this.g.news.headline(`Police call a new figure a "${title.toLowerCase()}" in the city's underworld`);
     } else if (tierOf(r.districts[d]) > beforeHere) {
       this.g.hud.toast(`${name.toUpperCase()}: ${repTitle(r.districts[d])}`, 'hack');
-      this.g.news.headline(`${name} residents talk about ${this.g.disguise.current.desc ? `someone in ${this.g.disguise.current.desc}` : 'a stranger'}`);
+      this.g.news.headline(`${name} residents talk about ${this.g.disguise.current.desc ? `someone in ${this.g.disguise.knownDesc || this.g.disguise.current.desc}` : 'a stranger'}`);
     }
   }
 

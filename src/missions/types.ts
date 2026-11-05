@@ -3,7 +3,7 @@ import type * as THREE from 'three';
 import type { Game } from '../core/game';
 import type { District } from '../map/districts';
 
-export type MissionType = 'heist' | 'hacker' | 'driving' | 'courier' | 'race' | 'side' | 'stunt' | 'bike' | 'intercept' | 'getaway' | 'tail' | 'prank' | 'rare' | 'repair';
+export type MissionType = 'heist' | 'hacker' | 'driving' | 'courier' | 'race' | 'side' | 'stunt' | 'bike' | 'intercept' | 'getaway' | 'tail' | 'prank' | 'rare' | 'repair' | 'shop';
 
 export const TYPE_INFO: Record<MissionType, { label: string; color: string; tag: string }> = {
   heist: { label: 'Heist', color: '#e0322a', tag: 'H' },
@@ -20,6 +20,7 @@ export const TYPE_INFO: Record<MissionType, { label: string; color: string; tag:
   prank: { label: 'Prank', color: '#ff7ab8', tag: 'P' },
   rare: { label: 'Rare car', color: '#e6c84a', tag: '?' },
   repair: { label: 'Repair', color: '#7ad8a8', tag: 'R' },
+  shop: { label: 'Shop', color: '#ff9a5a', tag: 'S' },
 };
 
 /** Handed to every mission script. `vars` is per-attempt scratch space. */

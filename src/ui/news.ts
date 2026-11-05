@@ -53,10 +53,11 @@ export class News {
   /** What the cops / witnesses think you look like right now. */
   description(): string {
     const g = this.g;
-    const outfit = g.disguise?.current.desc ?? 'a green tie';
     const v = g.player.vehicle;
     if (v) return `${this.colorName(v.color)} ${v.label.toLowerCase()}`;
-    return `suspect in ${outfit}`;
+    // the news only knows what somebody saw
+    if (g.disguise?.knownDesc) return `suspect last seen in ${g.disguise.knownDesc}`;
+    return `suspect in ${g.disguise?.current.desc ?? 'a green tie'}`;
   }
 
   colorName(hex: string) {

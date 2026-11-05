@@ -526,3 +526,20 @@ html.touch .rotate-screen .rot-phone { width: 44px; height: 76px; border: 4px so
 #ui.touch .map-help { display: none; }
 #ui.touch .tc-btn { font-size: clamp(11px, 3.4vh, 15px); }
 #ui.touch .tc-btn.big { font-size: clamp(13px, 4vh, 18px); }
+
+/* ---- clothes stores, barber, wardrobe: the list on the right, the player on the left ---- */
+.shop-ui { left: auto; right: 12px; top: 12px; bottom: 12px; transform: none; width: min(440px, 46vw); max-height: none; box-sizing: border-box; }
+.shop-ui .hu-list { flex: 1; min-height: 0; }
+.shop-msg { min-height: 20px; font-size: 17px; color: #ffcfb0; text-transform: none; }
+.shop-acts { display: flex; gap: 8px; }
+.shop-btn { flex: 1; min-height: 40px; font-size: 22px; padding: 2px 6px; box-shadow: 2px 2px 0 #000; }
+.shop-btn.alt { background: #1a2230; color: var(--ink); border: 2px solid var(--line); }
+#ui.touch .shop-ui { right: max(6px, env(safe-area-inset-right)); top: max(6px, env(safe-area-inset-top)); bottom: max(6px, env(safe-area-inset-bottom)); width: min(460px, 52vw); max-height: none; padding: 3px 8px; }
+#ui.touch .shop-msg { min-height: 0; font-size: var(--t-small); }
+#ui.touch .shop-btn { min-height: 34px; font-size: var(--t-body); }
+#ui.touch .shop-ui .hu-head { font-size: var(--t-head); }
+#ui.touch .shop-ui .hu-tabs { margin: 2px 0; }
+#ui.touch .shop-ui .hu-list { margin: 1px 0; min-height: 40px; }
+#ui.touch .shop-ui .hu-row { padding: 1px 4px; }
+#ui.touch .shop-ui .hu-tabs { flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; }
+#ui.touch .shop-ui .hu-tab { flex: none; }

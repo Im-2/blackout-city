@@ -1,9 +1,8 @@
 // Cash economy: carried loot (lost if busted) -> sell at the pawn shop fence
-// or stash at home. Cash buys hack upgrades, car tuning, outfits,
-// and resprays.
+// or stash at home. Cash buys hack upgrades, car tuning and resprays;
+// clothes and food are in ui/shopui.ts.
 import type { Game } from './game';
 import type { LootItem } from '../save/save';
-import { OUTFITS } from '../player/disguise';
 import type { Vehicle } from '../vehicles/vehicle';
 import { PAL } from './palette';
 
@@ -79,23 +78,6 @@ export class Shop {
     s.cash -= n;
     this.g.audio.cash();
     return true;
-  }
-
-  buyNextOutfit() {
-    const g = this.g;
-    const next = OUTFITS.find((o) => !g.disguise.owned.has(o.id));
-    if (!next) { this.cycleOutfit(); return; }
-    if (!this.pay(Math.round(next.price * g.rep.priceScale))) return;
-    g.disguise.owned.add(next.id);
-    g.save.data.outfits = [...g.disguise.owned];
-    g.disguise.wear(next.id);
-  }
-
-  cycleOutfit() {
-    const g = this.g;
-    const owned = OUTFITS.filter((o) => g.disguise.owned.has(o.id));
-    const i = owned.findIndex((o) => o.id === g.disguise.current.id);
-    g.disguise.wear(owned[(i + 1) % owned.length].id);
   }
 
   /** buy the next tier of an upgrade at the hacker desk */

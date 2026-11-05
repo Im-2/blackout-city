@@ -1,13 +1,13 @@
 // Map icons: every kind of place has its own silhouette as well as its colour, so
 // they read at a glance. Shared by the full map, the location list and the minimap.
 
-export type IconKind = 'diamond' | 'flag' | 'house' | 'bank' | 'shield' | 'tower' | 'circle' | 'coin' | 'garage' | 'ramp' | 'taxi' | 'metro' | 'wheel' | 'wheelpay' | 'police' | 'cluster' | 'truck' | 'getaway' | 'eye' | 'bolt' | 'rarecar';
+export type IconKind = 'diamond' | 'flag' | 'house' | 'bank' | 'shield' | 'tower' | 'circle' | 'coin' | 'garage' | 'ramp' | 'taxi' | 'metro' | 'wheel' | 'wheelpay' | 'police' | 'cluster' | 'truck' | 'getaway' | 'eye' | 'bolt' | 'rarecar' | 'hanger' | 'scissors' | 'cup' | 'stand';
 
 const INK = '#0a1218', EDGE = '#0f141c';
 
 /** half-size in pixels at scale 1: bigger means more important */
 export const ICON_R: Record<IconKind, number> = {
-  diamond: 14, flag: 13, house: 13, bank: 12, shield: 12, tower: 11, ramp: 11, circle: 9, coin: 9, garage: 8, taxi: 6, metro: 6, wheel: 6, wheelpay: 6, police: 5, cluster: 10, truck: 13, getaway: 13, eye: 13, bolt: 12, rarecar: 8,
+  diamond: 14, flag: 13, house: 13, bank: 12, shield: 12, tower: 11, ramp: 11, circle: 9, coin: 9, garage: 8, taxi: 6, metro: 6, wheel: 6, wheelpay: 6, police: 5, cluster: 10, truck: 13, getaway: 13, eye: 13, bolt: 12, rarecar: 8, hanger: 10, scissors: 9, cup: 8, stand: 6,
 };
 
 function poly(c: CanvasRenderingContext2D, pts: number[][], x: number, y: number, r: number, offset = 0) {
@@ -32,6 +32,14 @@ const SHAPE: Partial<Record<IconKind, number[][]>> = {
   // a car from the side
   getaway: [[-1, 0.05], [-0.55, 0.05], [-0.3, -0.6], [0.45, -0.6], [0.7, 0.05], [1, 0.05], [1, 0.7], [-1, 0.7]],
   rarecar: [[-1, 0.05], [-0.55, 0.05], [-0.3, -0.6], [0.45, -0.6], [0.7, 0.05], [1, 0.05], [1, 0.7], [-1, 0.7]],
+  // a coat hanger
+  hanger: [[0, -1], [0.2, -0.65], [1, 0.3], [1, 0.75], [-1, 0.75], [-1, 0.3], [-0.2, -0.65]],
+  // crossed blades
+  scissors: [[-1, -1], [-0.55, -1], [0, -0.35], [0.55, -1], [1, -1], [0.35, 0], [1, 0.9], [0.55, 1], [0, 0.35], [-0.55, 1], [-1, 0.9], [-0.35, 0]],
+  // a takeaway cup
+  cup: [[-0.8, -0.8], [0.8, -0.8], [0.55, 1], [-0.55, 1]],
+  // a cart umbrella
+  stand: [[0, -1], [1, -0.2], [0.14, -0.2], [0.14, 1], [-0.14, 1], [-0.14, -0.2], [-1, -0.2]],
   // an eye
   eye: [[-1, 0], [-0.5, -0.5], [0.5, -0.5], [1, 0], [0.5, 0.5], [-0.5, 0.5]],
   // a lightning bolt

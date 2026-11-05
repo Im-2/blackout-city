@@ -40,7 +40,7 @@ const STATIC: { id: string; name: string; desc: string; category: PlaceCategory;
   { id: 'tower', name: 'Vantage Tower', desc: 'Server room, rooftop helipad and ziplines.', category: 'service', icon: 'tower', color: '#c8c3b5', prio: PRIO.key, x: 28, z: 14 },
   { id: 'mart', name: 'Mart 24', desc: 'Rob or skim the register.', category: 'shop', icon: 'circle', color: '#5ac8c8', tag: 'S', prio: PRIO.shop, x: -40.5, z: 10 },
   { id: 'gems', name: 'Gems & Co', desc: 'Hack the door. Lasers, four cases and a safe.', category: 'shop', icon: 'circle', color: '#d898e8', tag: 'S', prio: PRIO.shop, x: -28, z: 10 },
-  { id: 'pawn', name: 'Pawn & Loan', desc: 'The fence buys your loot. Also sells clothes.', category: 'shop', icon: 'coin', color: '#ffd24a', tag: '$', prio: PRIO.shop, x: -16.7, z: 10 },
+  { id: 'pawn', name: 'Pawn & Loan', desc: 'The fence buys your loot. Second-hand clothes and working disguises too.', category: 'shop', icon: 'coin', color: '#ffd24a', tag: '$', prio: PRIO.shop, x: -16.7, z: 10 },
   { id: 'parking', name: 'Parking garage', desc: 'Three levels, cars to swap, respray booth $200.', category: 'service', icon: 'garage', color: '#8fb0d6', tag: 'P', prio: PRIO.garage, x: 11, z: 84 },
   { id: 'old-garage', name: 'Old Garage', desc: 'The heist drop. Get here with the loot, unseen.', category: 'service', icon: 'garage', color: '#ffb000', tag: 'D', prio: PRIO.garage, x: 125, z: 141 },
   { id: 'arcade', name: 'Lucky 7 Arcade', desc: 'Closed for now.', category: 'shop', icon: 'circle', color: '#6a6f78', tag: 'x', prio: PRIO.minor, x: -140, z: 9.6, status: 'Closed', locked: true },
@@ -75,10 +75,11 @@ export class Places {
     for (const s of STATIC) out.push(base({ ...s, status: s.status ?? 'Available', locked: !!s.locked, pin: s.id === 'home' }));
     for (const s of g.activities.spots) {
       const bike = s.type === 'bike' || s.type === 'repair';
+      const shop = s.category === 'shop';
       out.push(base({
-        id: s.id, name: s.name, desc: s.intro, category: bike ? 'service' : 'activity',
-        icon: s.icon ?? (bike ? (s.tag === '$' ? 'wheelpay' : 'wheel') : 'ramp'), color: g.activities.iconColor(s), tag: s.tag,
-        prio: bike ? PRIO.minor : PRIO.activity, x: s.x, z: s.z, pin: !!s.pin,
+        id: s.id, name: s.name, desc: s.intro, category: s.category ?? (bike ? 'service' : 'activity'),
+        icon: s.icon ?? (bike ? (s.tag === '$' ? 'wheelpay' : 'wheel') : 'ramp'), color: s.color ?? g.activities.iconColor(s), tag: s.tag,
+        prio: s.minor ? PRIO.minor : shop ? PRIO.shop : bike ? PRIO.minor : PRIO.activity, x: s.x, z: s.z, pin: !!s.pin,
       }));
     }
     for (const r of RARES) {

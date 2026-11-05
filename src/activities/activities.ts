@@ -20,6 +20,11 @@ export interface ActivitySpot {
   icon?: import('../ui/mapicons').IconKind;
   /** one line for the phone-sized card */
   short?: string;
+  /** map colour and LOCATIONS tab, if not the type's */
+  color?: string;
+  category?: 'shop' | 'service' | 'activity';
+  /** small on the map, like taxis */
+  minor?: boolean;
 }
 
 const CARD_TIME = device.touch ? 5 : 7;

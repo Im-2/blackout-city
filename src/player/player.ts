@@ -36,6 +36,8 @@ export class Player {
   private vault: { t: number; dur: number; from: THREE.Vector3; to: THREE.Vector3; top: number } | null = null;
   focus: Interactable | Vehicle | null = null;
   focusLabel = '';
+  /** seconds of faster running left, from food */
+  sprintT = 0;
 
   constructor(private g: Game) {
     this.view = createCharacter('player', PLAYER_SKIN);
@@ -186,7 +188,8 @@ export class Player {
     if (ml > 1e-3) { mx /= ml; mz /= ml; }
     const hacking = g.hack.active;
     const run = inp.held('run') && !hacking;
-    const top = ml > 0 ? (run ? RUN : WALK) * (hacking ? 0.5 : 1) * (g.heist.hasLoot ? 0.92 : 1) : 0;
+    if (this.sprintT > 0) this.sprintT -= dt;
+    const top = ml > 0 ? (run ? RUN * (this.sprintT > 0 ? 1.15 : 1) : WALK) * (hacking ? 0.5 : 1) * (g.heist.hasLoot ? 0.92 : 1) : 0;
     const lambda = ml > 0 ? (this.grounded ? 9 : 2.5) : this.grounded ? 12 : 1;
     this.vx = damp(this.vx, mx * top, lambda, dt);
     this.vz = damp(this.vz, mz * top, lambda, dt);

@@ -13,6 +13,7 @@ import { PAL } from '../core/palette';
 import { Rng } from '../core/math';
 import { Kit } from './interior';
 import { Home } from './home';
+import { Stores, STORE_BLOCKS } from './stores';
 import { GeoBuilder } from './geo';
 import { worldMat } from '../render/patch';
 import { worldMaterials } from './materials';
@@ -63,6 +64,7 @@ const RESERVED: Record<string, [number, number]> = {
   stuntpark: [6, 10],
   longjump: [4, 10],
   shoreleap: [3, 11],
+  ...STORE_BLOCKS,
 };
 
 export class Buildings {
@@ -128,6 +130,7 @@ export class Buildings {
     this.buildGarage();
     this.buildTower();
     this.buildStubs();
+    new Stores(g, this).build();
     this.buildLadders();
     this.buildZiplines();
     // flush exteriors
@@ -151,7 +154,7 @@ export class Buildings {
     return s;
   }
 
-  private sign(text: string, x: number, y: number, z: number, heading: number, w: number, bg: string, fg: string) {
+  sign(text: string, x: number, y: number, z: number, heading: number, w: number, bg: string, fg: string) {
     const k = new Kit(this.g.col);
     k.sign(text, x, y, z, heading, w, w * 0.19, bg, fg);
     k.finish(this.g.scene);
@@ -329,9 +332,9 @@ export class Buildings {
           action: () => g.loot.sellAll(),
         });
         s.interactables.push({
-          pos: new THREE.Vector3(-20.5, 0.15, 14.3), radius: 1.8, label: 'Buy clothes',
+          pos: new THREE.Vector3(-20.5, 0.15, 14.3), radius: 1.8, label: 'Buy second-hand clothes',
           enabled: () => true,
-          action: () => g.shop.buyNextOutfit(),
+          action: () => g.shopUi.open('pawn', 'PAWN & LOAN'),
         });
       },
     });
@@ -396,7 +399,7 @@ export class Buildings {
             s.state.wiped = true;
             g.police.heat = Math.max(g.police.minHeat, g.police.heat - 2);
             g.police.knownVehicle = null;
-            g.disguise.known = null;
+            g.disguise.forget();
             g.routes.scores.fill(0);
             g.routes.save();
             g.police.watched = [];
@@ -691,7 +694,7 @@ export class Buildings {
   }
 
   // ------------------------------------------------------------------ helpers used by builders
-  private npc(k: Kit, type: 'vendor' | 'local' | 'office', x: number, z: number, h: number, s: Site) {
+  npc(k: Kit, type: 'vendor' | 'local' | 'office', x: number, z: number, h: number, s: Site) {
     const n = new RigCharacter(makePedSkin(type, this.rng));
     n.root.position.set(x, 0.15, z);
     n.root.rotation.y = h;

@@ -103,6 +103,9 @@ const ATLAS = 128;
 
 interface Rect { x: number; y: number; w: number; h: number; }
 
+/** a hoodie's pocket and cuffs: the same colour, a shade down */
+const darker = (hex: string, f = 0.8) => `#${new THREE.Color(hex).multiplyScalar(f).getHexString()}`;
+
 /** Paint one face of one part. */
 function paint(ctx: CanvasRenderingContext2D, part: string, face: Face, r: Rect, k: Skin) {
   const fill = (hex: string, amt = 0.07) => mottle(ctx, r.x, r.y, r.w, r.h, hex, amt);
@@ -163,7 +166,7 @@ function paint(ctx: CanvasRenderingContext2D, part: string, face: Face, r: Rect,
       if (face === 'pz') px(W / 2 - 1.5, 0, 3, 1, '#7a3a28');
       break;
     case 'glasses':
-      fill('#141414', 0.03);
+      fill(k.glassTint ?? '#141414', 0.03);
       if (face === 'pz') { px(1, 1, 3, 1, '#4a5a66'); px(W - 4, 1, 3, 1, '#4a5a66'); }
       break;
     case 'cap':
@@ -213,10 +216,10 @@ function paint(ctx: CanvasRenderingContext2D, part: string, face: Face, r: Rect,
           px(0, 0, 2, 1, '#2c364c'); px(W - 2, 0, 2, 1, '#2c364c');
         }
         if (k.topStyle === 'hoodie') {
-          px(W / 2 - 3, 0, 6, 2, '#3a7a22');
+          px(W / 2 - 3, 0, 6, 2, darker(k.top, 0.72));
           px(W / 2 - 2, 2, 1, 6, '#e8e8e0'); px(W / 2 + 1, 2, 1, 6, '#e8e8e0'); // drawstrings
-          px(3, H - 9, W - 6, 6, '#3f7f24'); // kangaroo pocket
-          px(0, H - 2, W, 2, '#3f7f24');
+          px(3, H - 9, W - 6, 6, darker(k.top)); // kangaroo pocket
+          px(0, H - 2, W, 2, darker(k.top));
         }
         if (k.topStyle === 'stripes') {
           px(W / 2 - 3, 0, 6, H, k.under!); // open shirt shows tee
@@ -224,7 +227,7 @@ function paint(ctx: CanvasRenderingContext2D, part: string, face: Face, r: Rect,
         }
         if (k.topStyle === 'tee') px(W / 2 - 2, 0, 4, 1, k.skin);
       }
-      if (face === 'nz' && k.topStyle === 'hoodie') px(2, 0, W - 4, 4, '#3f7f24');
+      if (face === 'nz' && k.topStyle === 'hoodie') px(2, 0, W - 4, 4, darker(k.top));
       if (k.hivis && face !== 'py') { px(0, H * 0.45, W, 2, '#d8d8c8'); px(0, H * 0.75, W, 2, '#d8d8c8'); }
       if (face === 'py') px(r.w / 2 - 2, 0, 4, r.h, k.skin);
       darkBottom(0.2);
@@ -249,7 +252,7 @@ function paint(ctx: CanvasRenderingContext2D, part: string, face: Face, r: Rect,
         if (k.topStyle === 'stripes' && face !== 'py') for (let x = 1; x < W; x += 3) px(x, 0, 1, Math.ceil(H * 0.55), k.stripe!);
       } else {
         fill(sleeveColor, 0.08);
-        if (k.sleeves === 'rolled') px(0, H - 3, W, 3, k.topStyle === 'uniform' ? '#2c364c' : k.topStyle === 'hoodie' ? '#3f7f24' : '#dcdcc0');
+        if (k.sleeves === 'rolled') px(0, H - 3, W, 3, k.topStyle === 'uniform' ? '#2c364c' : k.topStyle === 'hoodie' ? darker(k.top) : '#dcdcc0');
         if (k.topStyle === 'uniform' && ((part === 'uaL' && face === 'px') || (part === 'uaR' && face === 'nx'))) {
           px(1, 2, W - 2, 4, '#4a5a78'); px(1, 2, W - 2, 1, '#c9a245');
         }

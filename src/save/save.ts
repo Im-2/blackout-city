@@ -4,12 +4,21 @@
 // it on reload.
 export interface LootItem { id: string; name: string; value: number; }
 export interface OwnedVehicle { kind: string; color: string; label: string; }
+export interface OutfitSlot { name: string; look: import('../player/clothes').Look; }
 
 export interface SaveData {
   cash: number;
   stash: LootItem[];
+  /** old saves: whole outfits, moved to `closet` and `look` on load */
   outfits: string[];
   outfit: string;
+  /** clothes bought, by item id */
+  closet: string[];
+  look: import('../player/clothes').Look | null;
+  hair: import('../player/clothes').Hair | null;
+  outfitSlots: (OutfitSlot | null)[];
+  /** outfits the police and the news have described */
+  described: string[];
   upgrades: { blackout: number; hackCost: number; regen: number; car: number };
   jobsDone: number;
   escapes: Record<string, number>; // escape method usage (adaptive police)
@@ -43,8 +52,13 @@ const SEEN_KEY = 'blackoutcity.seen.v1';
 const fresh = (): SaveData => ({
   cash: 0,
   stash: [],
-  outfits: ['clerk', 'hoodie'],
+  outfits: [],
   outfit: 'clerk',
+  closet: [],
+  look: null,
+  hair: null,
+  outfitSlots: [],
+  described: [],
   upgrades: { blackout: 0, hackCost: 0, regen: 0, car: 0 },
   jobsDone: 0,
   escapes: {},

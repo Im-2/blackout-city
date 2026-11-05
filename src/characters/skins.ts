@@ -18,6 +18,7 @@ export interface Skin {
   sole?: string;
   beard?: string;
   glasses?: boolean;
+  glassTint?: string;
   headphones?: string;
   cap?: string;
   badge?: boolean;

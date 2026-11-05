@@ -1,59 +1,101 @@
-// Disguises: swap the player's outfit. Police remember the outfit they last
-// saw; in a different outfit they only recognise you up close.
-import { PLAYER_SKIN, Skin } from '../characters/skins';
+// Disguises: what you're wearing against what the police and the news have on file.
+// The cop who last saw you remembers that outfit; anything they've had described
+// before still rings a bell; something new only gets recognised up close.
+import { buildSkin, clerkLook, describe, Hair, itemById, LEGACY, Look, lookSig, SLOTS, startHair, START_CLOSET } from './clothes';
+import type { Skin } from '../characters/skins';
 import type { Game } from '../core/game';
 
-export interface Outfit { id: string; name: string; desc: string; price: number; skin: Skin; }
+export interface Outfit { id: string; name: string; desc: string; skin: Skin; }
 
-const mk = (id: string, name: string, desc: string, price: number, o: Partial<Skin>): Outfit => ({
-  id, name, desc, price, skin: { ...PLAYER_SKIN, key: `player-${id}`, props: [], ...o },
-});
-
-export const OUTFITS: Outfit[] = [
-  mk('clerk', 'Tired clerk', 'a green tie', 0, {}),
-  mk('hoodie', 'Grey hoodie', 'a grey hoodie', 0, { top: '#6e6a62', topStyle: 'hoodie', sleeves: 'long', tie: undefined, cap: '#1e1e1e', pants: '#2c2e3c', shoes: '#2a2a2a' }),
-  mk('courier', 'Courier', 'an orange courier jacket', 400, { top: '#c96a3a', topStyle: 'hoodie', sleeves: 'rolled', tie: undefined, cap: '#c96a3a', props: ['backpack'], shoes: '#d0c8b8', sole: '#e0d8c4' }),
-  mk('worker', 'Road crew', 'a hi-vis vest', 600, { top: '#d8782a', topStyle: 'tee', hivis: true, sleeves: 'short', tie: undefined, props: ['hardhat'], pants: '#3b4a5c', shoes: '#4a3424' }),
-  mk('suit', 'Navy suit', 'a navy suit', 900, { top: '#23283a', tie: '#7a1c1c', sleeves: 'long', pants: '#23283a', shoes: '#1e1e1e', hairStyle: 'short' }),
-  mk('tourist', 'Tourist', 'a striped shirt and camera', 500, { top: '#c4a03c', topStyle: 'stripes', stripe: '#f0f0e8', under: '#e6e0d4', sleeves: 'short', tie: undefined, cap: '#d8d0bc', props: ['camera'], pants: '#b39a73' }),
-];
+export const FULL_RANGE_DESCRIBED = 14, RANGE_FRESH = 8;
 
 export class Disguise {
-  owned = new Set<string>(['clerk', 'hoodie']);
-  current: Outfit = OUTFITS[0];
-  /** outfit the police are looking for (null = no description yet) */
+  owned = new Set<string>(START_CLOSET);
+  look: Look = clerkLook();
+  hair: Hair = startHair();
+  current: Outfit = this.outfitOf(this.look, this.hair);
+  /** the outfit the police are looking for (null = no description yet) */
   known: string | null = null;
+  knownDesc = '';
 
   constructor(private g: Game) {}
 
+  private outfitOf(look: Look, hair: Hair): Outfit {
+    return { id: lookSig(look), name: itemById(look.jacket)?.name ?? itemById(look.top)?.name ?? 'Plain clothes', desc: describe(look), skin: buildSkin(look, hair) };
+  }
+
   reset() {
-    this.owned = new Set(['clerk', 'hoodie']);
-    this.current = OUTFITS.find((o) => o.id === this.g.save.data.outfit) ?? OUTFITS[0];
-    for (const id of this.g.save.data.outfits) this.owned.add(id);
+    const s = this.g.save.data;
+    // saves from before the shops stored one whole outfit
+    for (const id of s.outfits) for (const it of LEGACY[id]?.items ?? []) if (!s.closet.includes(it)) s.closet.push(it);
+    s.outfits = [];
+    if (!s.look) s.look = { ...clerkLook(), ...(LEGACY[s.outfit]?.look ?? {}) };
+    this.owned = new Set([...START_CLOSET, ...s.closet]);
+    this.look = { ...clerkLook(), ...s.look };
+    this.hair = { ...startHair(), ...s.hair };
+    this.current = this.outfitOf(this.look, this.hair);
     this.known = null;
+    this.knownDesc = '';
     this.g.player.setSkin(this.current.skin);
   }
 
-  wear(id: string) {
-    const o = OUTFITS.find((x) => x.id === id);
-    if (!o) return;
-    this.current = o;
-    this.g.player.setSkin(o.skin);
-    this.g.save.data.outfit = id;
+  buy(id: string) {
+    const s = this.g.save.data;
+    this.owned.add(id);
+    if (!s.closet.includes(id)) s.closet.push(id);
+  }
+
+  /** the model only: the shop screens use it while you browse */
+  preview(look: Look, hair: Hair = this.hair) {
+    this.g.player.setSkin(buildSkin(look, hair));
+  }
+
+  wear(look: Look, quiet = false) {
+    this.look = { ...look };
+    this.g.save.data.look = this.look;
+    this.current = this.outfitOf(this.look, this.hair);
+    this.g.player.setSkin(this.current.skin);
     this.g.fx.spawn('dust', this.g.player.pos.clone().setY(1), 14);
-    const changed = this.known && this.known !== id;
-    this.g.hud.toast(changed ? `NEW LOOK: ${o.name.toUpperCase()} — DESCRIPTION OUT OF DATE` : `OUTFIT: ${o.name.toUpperCase()}`, changed ? 'cool' : 'hack');
+    const changed = this.known && this.known !== this.current.id;
+    if (!quiet) this.g.hud.toast(changed ? `NEW LOOK: ${this.current.desc.toUpperCase()} — DESCRIPTION OUT OF DATE` : `WEARING ${this.current.desc.toUpperCase()}`, changed ? 'cool' : 'hack');
     if (changed) this.g.police.onDescriptionLost('outfit');
+  }
+
+  setHair(hair: Hair) {
+    this.hair = hair;
+    this.g.save.data.hair = hair;
+    this.current = this.outfitOf(this.look, hair);
+    this.g.player.setSkin(this.current.skin);
+  }
+
+  equipped(id: string) {
+    return SLOTS.some((x) => this.look[x.id] === id);
+  }
+
+  /** has this outfit ever gone out over the radio? */
+  onFile(look: Look) {
+    return this.g.save.data.described.includes(lookSig(look));
   }
 
   /** Called whenever police get eyes on the player on foot. */
   seen() {
+    if (this.known === this.current.id) return;
     this.known = this.current.id;
+    this.knownDesc = this.current.desc;
+    const d = this.g.save.data.described;
+    if (!d.includes(this.known)) d.push(this.known);
+  }
+
+  /** the records room hack */
+  forget() {
+    this.known = null;
+    this.knownDesc = '';
+    this.g.save.data.described = [];
   }
 
   /** Recognition distance for a cop who has a description. */
   recogniseRange(normal: number) {
     if (!this.known || this.known === this.current.id) return normal;
-    return Math.min(normal, 8);
+    return Math.min(normal, this.onFile(this.look) ? FULL_RANGE_DESCRIBED : RANGE_FRESH);
   }
 }
