@@ -59,6 +59,18 @@ export class Signals {
     return s.stage === 1 ? 'yellow' : 'green';
   }
 
+  /** how long this axis stays red from now: 0 if traffic may already go */
+  redLeft(node: number, axis: 'x' | 'z') {
+    const s = this.nodes[node];
+    if (s.override === 'green') return 0;
+    if (s.override === 'red') return Math.max(0, s.overrideT);
+    if (s.override === 'wave') return axis === s.waveAxis ? 0 : Math.max(0, s.overrideT);
+    if (s.green === axis) return s.stage === 2 ? ALLRED - s.t + GREEN + YELLOW + ALLRED : 0;
+    if (s.stage === 0) return GREEN - s.t + YELLOW + ALLRED;
+    if (s.stage === 1) return YELLOW - s.t + ALLRED;
+    return ALLRED - s.t;
+  }
+
   hack(node: number, mode: 'green' | 'red', duration = 12) {
     const s = this.nodes[node];
     s.override = mode;

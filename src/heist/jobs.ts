@@ -91,7 +91,7 @@ export class Jobs {
         const p = lanePoint(A.x, A.z, B.x, B.z, 0.4, LANE);
         const v = new Vehicle('van', '#3a3e44', g.col);
         v.p.maxSpeed = 18;
-        v.maxHp = v.hp = 80; // two or three good rams stop it
+        v.maxHp = v.hp = 160;
         v.driver = 'traffic';
         v.ai = { a: e.a, b: e.b, c: g.city.graph.other(g.city.graph.edges[g.city.graph.nodes[e.b].edges[0]], e.b), phase: 'edge', pts: edgePoints(g, e.a, e.b), idx: 4, cruise: 9, crashedT: 0, stuckT: 0, honkT: 0, blockedT: 0, lane: LANE, laneCD: 0, stopT: 0, stopCD: 0, emergency: false, panicT: 0 };
         v.place(p.x, p.z, Math.atan2(B.x - A.x, B.z - A.z));
@@ -214,6 +214,6 @@ export class Jobs {
     // data job finishes when you walk through your front door with the drive
     if (a.id === 'data' && a.done[0] && this.g.buildings.siteAt(this.g.player.pos.x, this.g.player.pos.z)?.id === 'home') { a.done[1] = true; this.check(); }
     // armored truck stops when it's damaged enough
-    if (a.id === 'armored' && this.truck && this.truck.health < 0.7) { this.truck.throttle = 0; this.truck.handbrake = true; (this.truck.ai as { crashedT: number }).crashedT = 0.01; }
+    if (a.id === 'armored' && this.truck && this.truck.hp < 110) { this.truck.throttle = 0; this.truck.handbrake = true; (this.truck.ai as { crashedT: number }).crashedT = 0.01; }
   }
 }

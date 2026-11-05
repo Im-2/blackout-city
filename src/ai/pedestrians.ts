@@ -9,12 +9,13 @@ import { RigCharacter, AnimState } from '../characters/rig';
 import { makePedSkin, PedType } from '../characters/pedTypes';
 import { DISTRICTS, districtAt } from '../map/districts';
 import type { Skin } from '../characters/skins';
-import { BLOCKS, blockBounds, groundHeight, CURB_H } from '../world/layout';
+import { BLOCKS, blockBounds, groundHeight, isRoad, CURB_H, HALF, PITCH, ROAD_HALF } from '../world/layout';
 import { GeoBuilder } from '../world/geo';
 import { basicMat, worldMat } from '../render/patch';
 import { texNoise } from '../assets/textures';
 import { device } from '../core/device';
 import type { Game } from '../core/game';
+import type { Vehicle } from '../vehicles/vehicle';
 
 type Role = 'walker' | 'vendor' | 'busker' | 'sitter' | 'chat' | 'queue' | 'guard';
 type State =
@@ -51,6 +52,10 @@ interface Agent {
   /** stopped to look at the player */
   watching?: boolean;
   noticeCD?: number;
+  /** running to get off a crossing */
+  hurry?: boolean;
+  /** a car is coming: when the penny drops */
+  reactAt?: number;
 }
 
 interface Station { x: number; z: number; heading: number; anim: AnimState; taken: Agent | null; }
@@ -58,6 +63,12 @@ interface Station { x: number; z: number; heading: number; anim: AnimState; take
 const POOL = device.mobile ? 90 : 230;
 const FULL_R = 52;
 const GHOST_R = 165;
+/** brisk enough that a crossing fits inside one walk signal */
+const CROSS_SPEED = 2.1, HURRY_SPEED = 5;
+/** how far ahead of a moving vehicle nothing may appear */
+const SPAWN_CLEAR = 30;
+const CAR_CELL = 24;
+const carCell = (x: number, z: number) => (Math.floor((x + HALF + 200) / CAR_CELL) << 10) | Math.floor((z + HALF + 200) / CAR_CELL);
 
 export class Pedestrians {
   agents: Agent[] = [];
@@ -75,7 +86,10 @@ export class Pedestrians {
   private dogPool: THREE.Group[] = [];
   private screamT = 0;
   private bubbles: { el: HTMLDivElement; a: Agent | null; t: number }[] = [];
-  stats = { total: 0, full: 0, ghost: 0, calling: 0 };
+  /** moving vehicles this frame, binned, so a pedestrian only looks at the ones near it */
+  private carGrid = new Map<number, Vehicle[]>();
+  private moving: Vehicle[] = [];
+  stats = { total: 0, full: 0, ghost: 0, calling: 0, playerHitsRoad: 0, playerHitsSidewalk: 0 };
 
   constructor(private g: Game) {
     this.buildGraph();
@@ -106,7 +120,7 @@ export class Pedestrians {
     if (!b) return;
     let best: Agent | null = null, bd = 12;
     for (const a of this.agents) {
-      if (a.off || a.role !== 'walker' || (a.state !== 'walk' && a.state !== 'idle') || (a.noticeCD ?? 0) > g.time) continue;
+      if (a.off || a.role !== 'walker' || (a.state !== 'walk' && a.state !== 'idle') || a.edge?.cross || (a.noticeCD ?? 0) > g.time) continue;
       const d = Math.hypot(a.x - P.x, a.z - P.z);
       if (d > 3 && d < bd && g.col.lineOfSight(a.x, a.y + 1.6, a.z, P.x, P.y + 1.4, P.z)) { bd = d; best = a; }
     }
@@ -150,15 +164,6 @@ export class Pedestrians {
           link(id(bi, bj, 2), id(bi + 1 - 1, bj + 1, 1), { node: G.node(bi + 1, bj + 1).id, axis: 'x' });
         }
       }
-  }
-
-  private nearestNode(x: number, z: number) {
-    let best = 0, bd = Infinity;
-    for (let i = 0; i < this.nodes.length; i++) {
-      const d = Math.hypot(this.nodes[i].x - x, this.nodes[i].z - z);
-      if (d < bd) { bd = d; best = i; }
-    }
-    return best;
   }
 
   // ------------------------------------------------------------------ ghosts (far LOD)
@@ -206,6 +211,8 @@ export class Pedestrians {
         add('chat', x, z, Math.atan2(c.x - x, c.z - z), i % 2 ? 'idle' : 'chat');
       }
     }
+    // some generated spots land off the kerb
+    for (const k of Object.keys(S)) S[k] = S[k].filter((p) => !isRoad(p.x, p.z));
     this.spots = S;
   }
 
@@ -301,12 +308,13 @@ export class Pedestrians {
       const A = this.nodes[n];
       const d = Math.hypot(A.x - px, A.z - pz);
       if (!initial && (d < 90 || g.isVisible(A.x, 1, A.z))) continue;
+      if (this.aheadOfCar(A.x, A.z)) continue;
       const D = DISTRICTS[districtAt(A.x, A.z)];
       const w = D.peds.find((p) => p[0] === a.type);
       const max = Math.max(...D.peds.map((p) => p[1]));
       if (this.rng.next() > ((w ? w[1] : 0.15) / max) * D.crowd && tries < 5) continue;
       a.a = n;
-      a.edge = this.pickEdge(n, -1);
+      a.edge = this.sidewalkEdge(n);
       a.b = a.edge.a === n ? a.edge.b : a.edge.a;
       a.t = this.rng.next();
       a.lat = this.rng.range(-1, 1);
@@ -342,22 +350,56 @@ export class Pedestrians {
   }
 
   private scare(a: Agent, fx: number, fz: number, handsUp: boolean) {
-    a.state = handsUp ? 'handsup' : 'panic';
-    a.timer = handsUp ? 2.2 : this.rng.range(3, 5.5);
+    // nobody stands in the road with their hands up
+    const road = isRoad(a.x, a.z);
+    a.state = handsUp && !road ? 'handsup' : 'panic';
+    a.timer = a.state === 'handsup' ? 2.2 : this.rng.range(3, 5.5);
     a.panicCD = 1;
+    a.hurry = false;
+    a.goal = this.fleeGoal(a, fx, fz);
+  }
+
+  /** the block this point belongs to: on a road, the nearer side */
+  private blockOf(x: number, z: number) {
+    const bi = Math.max(0, Math.min(BLOCKS - 1, Math.floor((x + HALF) / PITCH)));
+    const bj = Math.max(0, Math.min(BLOCKS - 1, Math.floor((z + HALF) / PITCH)));
+    return { bi, bj, b: blockBounds(bi, bj) };
+  }
+
+  /** Away from the threat, but along the pavement. Never over a road; off one if you're on it. */
+  private fleeGoal(a: Agent, fx: number, fz: number) {
+    const { b } = this.blockOf(a.x, a.z);
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    if (isRoad(a.x, a.z)) return { x: clamp(a.x, b.x0 + 2, b.x1 - 2), z: clamp(a.z, b.z0 + 2, b.z1 - 2) };
+    const dW = a.x - b.x0, dE = b.x1 - a.x, dN = a.z - b.z0, dS = b.z1 - a.z;
+    const near = Math.min(dW, dE, dN, dS);
     const dx = a.x - fx, dz = a.z - fz;
     const l = Math.hypot(dx, dz) || 1;
-    a.goal = { x: a.x + (dx / l) * 16, z: a.z + (dz / l) * 16 };
+    // inside the lot (a park, a forecourt): straight away, staying on the block
+    if (near > 4.5) return { x: clamp(a.x + (dx / l) * 16, b.x0 + 2, b.x1 - 2), z: clamp(a.z + (dz / l) * 16, b.z0 + 2, b.z1 - 2) };
+    const INSET = 2.4;
+    const alongX = near === dN || near === dS; // this side runs along x
+    const sideLine = alongX ? (near === dN ? b.z0 + INSET : b.z1 - INSET) : near === dW ? b.x0 + INSET : b.x1 - INSET;
+    const dir = (alongX ? dx : dz) >= 0 ? 1 : -1;
+    const lo = (alongX ? b.x0 : b.z0) + INSET, hi = (alongX ? b.x1 : b.z1) - INSET;
+    const cur = alongX ? a.x : a.z;
+    let to = clamp(cur + dir * 16, lo, hi);
+    // cornered: go the other way rather than off the kerb
+    if (Math.abs(to - cur) < 3) to = clamp(cur - dir * 16, lo, hi);
+    return alongX ? { x: to, z: sideLine } : { x: sideLine, z: to };
   }
 
   lure(pos: THREE.Vector3, radius = 40) {
     for (const a of this.agents) {
-      if (a.off || a.state === 'knocked' || a.state === 'panic' || a.state === 'inside' || a.role === 'vendor') continue;
+      if (a.off || a.state === 'knocked' || a.state === 'panic' || a.state === 'inside' || a.role === 'vendor' || isRoad(a.x, a.z)) continue;
       if (Math.hypot(a.x - pos.x, a.z - pos.z) < radius) {
+        const { bi, bj, b } = this.blockOf(a.x, a.z);
+        const at = this.blockOf(pos.x, pos.z);
+        if (at.bi !== bi || at.bj !== bj) continue;
         a.state = 'lured';
         a.timer = this.rng.range(8, 13);
         const ang = this.rng.range(0, Math.PI * 2);
-        a.goal = { x: pos.x + Math.cos(ang) * 4.5, z: pos.z + Math.sin(ang) * 4.5 };
+        a.goal = { x: Math.max(b.x0 + 1.2, Math.min(b.x1 - 1.2, pos.x + Math.cos(ang) * 4.5)), z: Math.max(b.z0 + 1.2, Math.min(b.z1 - 1.2, pos.z + Math.sin(ang) * 4.5)) };
       }
     }
   }
@@ -375,7 +417,7 @@ export class Pedestrians {
   witnessCrime(pos: THREE.Vector3, kind: string, maxCallers = 2) {
     const g = this.g;
     const cands = this.agents
-      .filter((a) => !a.off && a.state !== 'inside' && a.state !== 'knocked' && a.state !== 'calling' && a.role !== 'guard' && Math.hypot(a.x - pos.x, a.z - pos.z) < 34)
+      .filter((a) => !a.off && a.state !== 'inside' && a.state !== 'knocked' && a.state !== 'calling' && a.role !== 'guard' && !isRoad(a.x, a.z) && Math.hypot(a.x - pos.x, a.z - pos.z) < 34)
       .sort((p, q) => Math.hypot(p.x - pos.x, p.z - pos.z) - Math.hypot(q.x - pos.x, q.z - pos.z))
       .slice(0, 8);
     let n = 0;
@@ -401,6 +443,7 @@ export class Pedestrians {
     this.screamT -= dt;
     this.lodT -= dt;
     const live = g.quality.p.peds;
+    this.binCars();
     this.agents.forEach((a, i) => {
       a.dist = Math.hypot(a.x - P.x, a.z - P.z);
       a.off = i >= live || a.parked;
@@ -444,39 +487,110 @@ export class Pedestrians {
     }
   }
 
-  private reactToCars(a: Agent) {
+  private binCars() {
+    for (const list of this.carGrid.values()) list.length = 0;
+    this.moving.length = 0;
+    for (const v of this.g.vehicles) {
+      if (v.speedAbs < 1.5) continue;
+      this.moving.push(v);
+      const k = carCell(v.pos.x, v.pos.z);
+      let list = this.carGrid.get(k);
+      if (!list) this.carGrid.set(k, (list = []));
+      list.push(v);
+    }
+  }
+
+  /** would something appearing here be in the way of a moving vehicle? */
+  private aheadOfCar(x: number, z: number) {
+    for (const v of this.moving) {
+      const dx = x - v.pos.x, dz = z - v.pos.z, d = Math.hypot(dx, dz);
+      if (d > SPAWN_CLEAR + v.speedAbs) continue;
+      if ((dx * v.vx + dz * v.vz) / (v.speedAbs * (d || 1)) > 0.3) return true;
+    }
+    return false;
+  }
+
+  private knock(a: Agent, v: Vehicle, dx: number, dz: number, d: number) {
     const g = this.g;
+    // ragdoll-lite knockdown, gets up later
+    a.state = 'knocked';
+    a.timer = 3.2;
+    a.hurry = false;
+    a.vx = v.vx * 0.65 + (dx / (d || 1)) * 2.5;
+    a.vz = v.vz * 0.65 + (dz / (d || 1)) * 2.5;
+    g.audio.thud(0.5, this.v3.set(a.x, 1, a.z));
+    g.fx.spawn('dust', this.v3.set(a.x, 0.5, a.z), 6);
+    if (v.driver === 'player') { this.stats[isRoad(a.x, a.z) ? 'playerHitsRoad' : 'playerHitsSidewalk']++; g.camRig.addShake(0.15); g.onPedHit(this.v3.set(a.x, 0, a.z)); }
+    this.panic(this.v3.set(a.x, 0, a.z), 14);
+  }
+
+  private reactToCars(a: Agent) {
     if (a.state === 'knocked' || a.state === 'inside') return;
-    for (const v of g.vehicles) {
+    const onRoad = isRoad(a.x, a.z);
+    let threat: Vehicle | null = null, threatT = Infinity;
+    const look = (v: Vehicle) => {
       const dx = a.x - v.pos.x, dz = a.z - v.pos.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 > 100) continue;
-      const sp = v.speedAbs;
-      const d = Math.sqrt(d2);
-      if (d < v.radius + 0.6 && sp > 4.5) {
-        // hit: ragdoll-lite knockdown, gets up later
-        a.state = 'knocked';
-        a.timer = 3.2;
-        a.vx = v.vx * 0.65 + (dx / (d || 1)) * 2.5;
-        a.vz = v.vz * 0.65 + (dz / (d || 1)) * 2.5;
-        g.audio.thud(0.5, this.v3.set(a.x, 1, a.z));
-        g.fx.spawn('dust', this.v3.set(a.x, 0.5, a.z), 6);
-        if (v.driver === 'player') { g.camRig.addShake(0.15); g.onPedHit(this.v3.set(a.x, 0, a.z)); }
-        this.panic(this.v3.set(a.x, 0, a.z), 14);
-        return;
-      }
-      // jump out of the way of a car heading at us
-      if (sp > 6 && d < 9 && a.state !== 'dodge') {
-        const along = -(dx * v.vx + dz * v.vz) / (sp * d);
-        if (along < -0.85) {
-          const side = Math.sign(dx * v.vz - dz * v.vx) || 1;
-          a.state = 'dodge';
-          a.timer = 0.45;
-          a.goal = { x: a.x + (-v.vz / sp) * side * 2.6, z: a.z + (v.vx / sp) * side * 2.6 };
-          if (v.driver === 'player' && this.screamT <= 0 && a.full) { this.g.audio.scream(this.v3.set(a.x, 1.6, a.z)); this.screamT = 1.5; }
-        } else if (sp > 13 && v.driver === 'player' && d < 7 && a.panicCD <= 0 && (a.state === 'walk' || a.state === 'station')) this.scare(a, v.pos.x, v.pos.z, false);
+      const d = Math.hypot(dx, dz), sp = v.speedAbs;
+      if (d < v.radius + 0.6 && sp > 4.5) { this.knock(a, v, dx, dz, d); return true; }
+      if (sp > 6 && d < 7 && a.panicCD <= 0 && v.driver === 'player' && (a.state === 'walk' || a.state === 'station') && !isRoad(v.pos.x, v.pos.z)) this.scare(a, v.pos.x, v.pos.z, false);
+      const along = (dx * v.vx + dz * v.vz) / (sp || 1);
+      if (along <= 0) return false;
+      const miss = Math.abs(dx * v.vz - dz * v.vx) / (sp || 1);
+      if (miss > v.radius + 1.3) return false;
+      const t = along / sp;
+      if (t < threatT) { threatT = t; threat = v; }
+      return false;
+    };
+    if (onRoad) { for (const v of this.moving) if (look(v)) return; } // a road is a long way to see down
+    else {
+      const cx = Math.floor((a.x + HALF + 200) / CAR_CELL), cz = Math.floor((a.z + HALF + 200) / CAR_CELL);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const list = this.carGrid.get(((cx + i) << 10) | (cz + j));
+        if (list) for (const v of list) if (look(v)) return;
       }
     }
+    const v = threat as Vehicle | null;
+    if (!v) { a.reactAt = 0; return; }
+    const sp = v.speedAbs;
+    // can it still stop short of me? then it probably will
+    const along = threatT * sp;
+    const committed = (sp * sp) / 18 + 3 > along;
+    const horizon = onRoad ? 3 : 0.7;
+    if (threatT > horizon || (onRoad && !committed) || sp < 3) { if (threatT > horizon + 1) a.reactAt = 0; return; }
+    // on the pavement, only a car that's actually left the road is a threat
+    if (!onRoad && isRoad(v.pos.x, v.pos.z) && isRoad(v.pos.x + v.vx * threatT, v.pos.z + v.vz * threatT)) return;
+    // a beat before it registers: faster cars get noticed sooner
+    const now = this.g.time;
+    if (!a.reactAt) { a.reactAt = now + Math.max(0.12, 0.35 - sp * 0.01); return; }
+    if (now < a.reactAt || a.state === 'dodge' || a.hurry) return;
+    a.reactAt = 0;
+    if (onRoad && a.state === 'walk' && a.edge?.cross) {
+      const left = (1 - a.t) * a.edge.len, back = a.t * a.edge.len;
+      const room = Math.min(left, back);
+      if (room / HURRY_SPEED < threatT) {
+        // run for the nearer kerb, even if that's back where you came from
+        if (back < left) { const b = a.b; a.b = a.a; a.a = b; a.t = 1 - a.t; a.lat = -a.lat; }
+        a.hurry = true;
+        return;
+      }
+    }
+    this.dodge(a, v, onRoad);
+  }
+
+  /** jump aside: away from the road if there's a choice */
+  private dodge(a: Agent, v: Vehicle, onRoad: boolean) {
+    const sp = v.speedAbs || 1;
+    let side = Math.sign((a.x - v.pos.x) * v.vz - (a.z - v.pos.z) * v.vx) || 1;
+    const px = -v.vz / sp, pz = v.vx / sp;
+    const { b } = this.blockOf(a.x, a.z);
+    const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
+    if (!onRoad && (a.x + px * side * 2.6 - cx) ** 2 + (a.z + pz * side * 2.6 - cz) ** 2 > (a.x - cx) ** 2 + (a.z - cz) ** 2) side = -side;
+    a.state = 'dodge';
+    a.timer = 0.45;
+    a.hurry = false;
+    a.goal = { x: a.x + px * side * 2.6, z: a.z + pz * side * 2.6 };
+    if (!onRoad) { a.goal.x = Math.max(b.x0 + 0.6, Math.min(b.x1 - 0.6, a.goal.x)); a.goal.z = Math.max(b.z0 + 0.6, Math.min(b.z1 - 0.6, a.goal.z)); }
+    if (v.driver === 'player' && this.screamT <= 0 && a.full) { this.g.audio.scream(this.v3.set(a.x, 1.6, a.z)); this.screamT = 1.5; }
   }
 
   private think(a: Agent, dt: number) {
@@ -486,18 +600,23 @@ export class Pedestrians {
     switch (a.state) {
       case 'walk': {
         const e = a.edge!;
-        a.t += (a.speed * dt) / e.len;
-        if (a.t >= 1) { this.arrive(a); return this.finish(a, dt, a.speed); }
+        const pace = a.hurry ? HURRY_SPEED : e.cross ? Math.max(a.speed, CROSS_SPEED) : a.speed;
+        // the light changed on me: don't dawdle
+        if (e.cross && !a.hurry && this.walkLeft(e) <= 0) a.hurry = true;
+        a.t += (pace * dt) / e.len;
+        if (a.t >= 1) { a.hurry = false; this.arrive(a); return this.finish(a, dt, a.speed); }
         const ox = a.x, oz = a.z;
         this.placeOnEdge(a);
         a.v = Math.hypot(a.x - ox, a.z - oz) / Math.max(dt, 1e-4);
-        a.y = CURB_H;
+        a.y = e.cross ? groundHeight(a.x, a.z) : CURB_H;
         if (a.timer < 0 && a.role === 'walker' && !e.cross) { a.state = 'idle'; a.timer = this.rng.range(1.5, 4); }
         return this.finish(a, dt, a.speed, true);
       }
       case 'wait': {
-        const e = a.edge!;
-        if (this.mayCross(e)) { a.state = 'walk'; a.timer = this.rng.range(6, 18); }
+        if (a.timer < 0) {
+          a.timer = 0.25; // no need to look every frame
+          if (this.mayCross(a.edge!, a)) { a.state = 'walk'; a.timer = this.rng.range(6, 18); }
+        }
         break;
       }
       case 'idle':
@@ -521,7 +640,7 @@ export class Pedestrians {
         break;
       case 'dodge':
         if (a.goal) { tx = a.goal.x; tz = a.goal.z; speed = 7; collide = true; }
-        if (a.timer < 0) { a.state = 'panic'; a.timer = 2.5; a.goal = { x: a.x + (a.x - (a.goal?.x ?? a.x)) * -3, z: a.z + (a.z - (a.goal?.z ?? a.z)) * -3 }; }
+        if (a.timer < 0) { const g0 = a.goal ?? a; this.scare(a, a.x - (g0.x - a.x), a.z - (g0.z - a.z), false); a.timer = 2.5; }
         break;
       case 'lured':
         if (a.goal) { tx = a.goal.x; tz = a.goal.z; speed = Math.hypot(tx - a.x, tz - a.z) > 1 ? 2.6 : 0; collide = true; }
@@ -557,12 +676,23 @@ export class Pedestrians {
         if (Math.hypot(tx - a.x, tz - a.z) < 0.6) { a.state = 'inside'; a.timer = this.rng.range(8, 30); this.hide(a); return; }
         break;
       case 'return': {
-        const n = this.nodes[a.a];
-        tx = n.x; tz = n.z; speed = 1.8; collide = true;
-        if (a.anchor) { tx = a.anchor.x; tz = a.anchor.z; }
+        // back to the nearest corner of this block; a spot across the road waits until nobody's looking
+        if (a.anchor) {
+          const here = this.blockOf(a.x, a.z), there = this.blockOf(a.anchor.x, a.anchor.z);
+          if (here.bi !== there.bi || here.bj !== there.bj) {
+            if (a.timer < 0 || !g.isVisible(a.x, 1, a.z)) { a.x = a.anchor.x; a.z = a.anchor.z; a.state = 'station'; }
+            break;
+          }
+          tx = a.anchor.x; tz = a.anchor.z;
+        } else {
+          a.a = this.nearestCorner(a.x, a.z);
+          const n = this.nodes[a.a];
+          tx = n.x; tz = n.z;
+        }
+        speed = 1.8; collide = true;
         if (Math.hypot(tx - a.x, tz - a.z) < 0.8 || a.timer < 0) {
           if (a.anchor) { a.state = 'station'; }
-          else { a.state = 'walk'; a.t = 0; a.edge = this.pickEdge(a.a, -1); a.b = a.edge.a === a.a ? a.edge.b : a.edge.a; a.lat = this.rng.range(-1, 1); }
+          else { a.state = 'walk'; a.t = 0; a.edge = this.sidewalkEdge(a.a); a.b = a.edge.a === a.a ? a.edge.b : a.edge.a; a.lat = this.rng.range(-1, 1); }
         }
         break;
       }
@@ -585,11 +715,53 @@ export class Pedestrians {
     if (!(a.anchor && a.state === 'station')) a.y = groundHeight(a.x, a.z);
   }
 
-  private mayCross(e: SEdge) {
+  /** seconds of walk signal left on this crossing (0 = traffic may go); unlit crossings have no signal */
+  private walkLeft(e: SEdge) {
+    const c = e.cross!;
+    const n = this.g.city.graph.nodes[c.node];
+    if (!n.hasLight) return Infinity;
+    return this.g.signals.redLeft(c.node, c.axis);
+  }
+
+  /** the kerb decision: the signal, then a look down the road */
+  private mayCross(e: SEdge, a: Agent) {
     if (!e.cross) return true;
-    const n = this.g.city.graph.nodes[e.cross.node];
-    if (!n.hasLight) return true;
-    return this.g.signals.state(e.cross.node, e.cross.axis) === 'red' && this.g.signals.nodes[e.cross.node].override !== 'green';
+    const pace = Math.max(a.speed, CROSS_SPEED), need = e.len / pace;
+    const left = this.walkLeft(e);
+    const lit = left !== Infinity;
+    if (lit && left < need + 0.5) return false;
+    // how far off is every vehicle on this road, in seconds, not metres?
+    const A = this.nodes[e.a], B = this.nodes[e.b];
+    const mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
+    const alongZ = e.cross.axis === 'z';
+    for (const v of this.moving) {
+      const lateral = alongZ ? v.pos.x - mx : v.pos.z - mz;
+      if (Math.abs(lateral) > ROAD_HALF + 2) continue;
+      const d = alongZ ? mz - v.pos.z : mx - v.pos.x;
+      const vel = alongZ ? v.vz : v.vx;
+      if (d * vel <= 0) continue; // going away
+      const t = Math.abs(d) / Math.max(Math.abs(vel), 0.1);
+      // with a signal, traffic stops on its own: only cars too close to stop count. The player might not stop at all.
+      const horizon = v.driver === 'player' || !lit ? need + 1 : 3;
+      if (t < horizon) return false;
+    }
+    return true;
+  }
+
+  private sidewalkEdge(node: number): SEdge {
+    const opts = this.nodes[node].edges.filter((e) => !e.cross);
+    return this.rng.pick(opts.length ? opts : this.nodes[node].edges);
+  }
+
+  private nearestCorner(x: number, z: number) {
+    const { bi, bj } = this.blockOf(x, z);
+    const base = (bj * BLOCKS + bi) * 4;
+    let best = base, bd = Infinity;
+    for (let k = 0; k < 4; k++) {
+      const n = this.nodes[base + k], d = Math.hypot(n.x - x, n.z - z);
+      if (d < bd) { bd = d; best = base + k; }
+    }
+    return best;
   }
 
   private pickEdge(node: number, from: number): SEdge {
@@ -606,11 +778,17 @@ export class Pedestrians {
     a.t = 0;
     a.lat = e.cross ? this.rng.range(-1.6, 1.6) : this.rng.range(-1.1, 1.1);
     this.placeOnEdge(a);
-    if (e.cross && !this.mayCross(e)) { a.state = 'wait'; }
+    if (e.cross && !this.mayCross(e, a)) { a.state = 'wait'; a.timer = 0.25; }
     // sometimes duck into a building
     else if (a.role === 'walker' && this.rng.chance(0.06) && this.g.city.doors.length) {
       let best: { x: number; z: number } | null = null, bd = 30;
-      for (const d of this.g.city.doors) { const dd = Math.hypot(d.x - a.x, d.z - a.z); if (dd < bd) { bd = dd; best = d; } }
+      const here = this.blockOf(a.x, a.z);
+      for (const d of this.g.city.doors) {
+        const dd = Math.hypot(d.x - a.x, d.z - a.z);
+        if (dd >= bd) continue;
+        const at = this.blockOf(d.x, d.z);
+        if (at.bi === here.bi && at.bj === here.bj) { bd = dd; best = d; }
+      }
       if (best) { a.state = 'toDoor'; a.goal = { x: best.x, z: best.z }; }
     }
   }
@@ -625,7 +803,7 @@ export class Pedestrians {
     let d = this.rng.pick(this.g.city.doors);
     for (let i = 0; i < 12 && Math.hypot(d.x - P.x, d.z - P.z) > 150; i++) d = this.rng.pick(this.g.city.doors);
     a.x = d.x; a.z = d.z; a.heading = d.heading;
-    a.a = this.nearestNode(d.x, d.z);
+    a.a = this.nearestCorner(d.x, d.z);
     a.state = 'return';
     a.timer = 15;
   }
@@ -762,7 +940,7 @@ export class Pedestrians {
       if (!a) break;
       const ang = this.rng.range(0, Math.PI * 2), r = this.rng.range(3, 14);
       a.x = x + Math.cos(ang) * r; a.z = z + Math.sin(ang) * r;
-      a.a = this.nearestNode(a.x, a.z);
+      a.a = this.nearestCorner(a.x, a.z);
       a.state = 'return'; a.timer = 20;
     }
     this.lodT = 0;

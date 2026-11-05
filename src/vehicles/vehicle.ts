@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { buildCar, CarKind, CarParts, LABELS, repaint } from './carMesh';
 import { clamp, damp, wrapAngle } from '../core/math';
 import { surfaceHeight } from '../world/layout';
-import { DAMAGE, HEALTH, impactDamage, massFactor } from './damage';
+import { aiVehicleDurability, crashDamage, impactDamage, landingDamage, playerVehicleDurability } from './damage';
 import type { Collision } from '../world/collision';
 
 export interface CarParams {
@@ -65,8 +65,10 @@ export class Vehicle {
   steer = 0;
   handbrake = false;
   driver: Driver = 'none';
-  hp = 100;
-  maxHp = 100;
+  /** 0 = wrecked, 1 = perfect */
+  health = 1;
+  /** mission vehicles with health of their own */
+  private maxOverride: number | null = null;
   wrecked = false;
   /** seconds until another hit counts in full, and how hard the last one was */
   private hitT = 0;
@@ -135,20 +137,23 @@ export class Vehicle {
       this.circleOffsets = Array.from({ length: n }, (_, i) => -half + (2 * half * i) / (n - 1));
     }
     this.grip = this.p.grip;
-    this.maxHp = this.hp = HEALTH[kind];
   }
 
-  /** 0 = wrecked, 1 = perfect */
-  get health() { return this.hp / this.maxHp; }
+  /** which damage table applies: who's driving right now */
+  get durability() { return this.driver === 'player' ? playerVehicleDurability : aiVehicleDurability; }
+  get maxHp() { return this.maxOverride ?? this.durability.health[this.kind]; }
+  set maxHp(n: number) { this.maxOverride = n; }
+  get hp() { return this.health * this.maxHp; }
+  set hp(n: number) { this.health = Math.max(0, n / this.maxHp); }
 
   /** engine output: normal until badly hurt, then fading a little */
   private get power() {
-    const h = this.health;
-    return h >= DAMAGE.limpBelow ? 1 : DAMAGE.limpFloor + (1 - DAMAGE.limpFloor) * (h / DAMAGE.limpBelow);
+    const h = this.health, D = this.durability;
+    return h >= D.limpBelow ? 1 : D.limpFloor + (1 - D.limpFloor) * (h / D.limpBelow);
   }
 
   repair() {
-    this.hp = this.maxHp;
+    this.health = 1;
     this.wrecked = false;
     this.hitT = this.lastHit = 0;
   }
@@ -218,7 +223,7 @@ export class Vehicle {
       this.yawRate = 0;
       this.vx *= 0.97;
       this.vz *= 0.97;
-      this.damage(impactDamage(impact, DAMAGE.landingSafe, DAMAGE.landingScale));
+      this.damage(landingDamage(this.durability, impact));
       if (impact > 6) impacts.push({ v: this, other: null, impact: impact * 0.5, x: this.pos.x, y: this.pos.y, z: this.pos.z, nx: 0, nz: 0 });
     }
     this.collideStatic(impacts);
@@ -342,7 +347,8 @@ export class Vehicle {
         const cross = fx * res.nz - fz * res.nx;
         this.spin -= clamp(cross * off * impact * 0.09, -4, 4);
         if (impact > 2) impacts.push({ v: this, other: null, impact, x: c.x - res.nx * this.radius, y: this.pos.y + 0.7, z: c.z - res.nz * this.radius, nx: res.nx, nz: res.nz });
-        this.damage(impactDamage(impact) * (res.solid ? 1 : DAMAGE.lightObject));
+        const D = this.durability;
+        this.damage(impactDamage(D, impact) * (res.solid ? 1 : D.lightObject));
       }
     }
   }
@@ -352,11 +358,11 @@ export class Vehicle {
     // one scrape can't count over and over: inside the cooldown only the extra force of a harder hit lands
     const felt = this.hitT > 0 ? amt - this.lastHit : amt;
     this.lastHit = this.hitT > 0 ? Math.max(this.lastHit, amt) : amt;
-    this.hitT = DAMAGE.cooldown;
+    this.hitT = this.durability.cooldown;
     if (felt <= 0) return;
     this.hp -= felt;
-    if (this.hp <= 0) {
-      this.hp = 0;
+    if (this.health <= 0) {
+      this.health = 0;
       this.wrecked = true;
       this.siren = false;
     }
@@ -457,10 +463,8 @@ export function collideVehicles(vs: Vehicle[], impacts: ImpactEvent[]) {
           A.spin += clamp((afz * dx - afx * dz) * a.off * jimp * ia * 0.16, -5, 5);
           B.spin -= clamp((bfz * dx - bfx * dz) * b.off * jimp * ib * 0.16, -5, 5);
           const impact = -vn;
-          const hurt = impactDamage(impact) * DAMAGE.otherCar;
-          // a police car hitting you hits harder than one bumping traffic
-          A.damage(hurt * massFactor(A.p.mass, B.p.mass) * (B.isCop && !A.isCop ? DAMAGE.policeRam / DAMAGE.otherCar : 1));
-          B.damage(hurt * massFactor(B.p.mass, A.p.mass) * (A.isCop && !B.isCop ? DAMAGE.policeRam / DAMAGE.otherCar : 1));
+          A.damage(crashDamage(A.durability, impact, A.p.mass, B.p.mass, B.isCop && !A.isCop));
+          B.damage(crashDamage(B.durability, impact, B.p.mass, A.p.mass, A.isCop && !B.isCop));
           if (impact > 2.5) impacts.push({ v: A, other: B, impact, x: (a.x + b.x) / 2, y: A.pos.y + 0.7, z: (a.z + b.z) / 2, nx: dx, nz: dz });
         }
     }
