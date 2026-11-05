@@ -19,7 +19,7 @@ const LEGEND: [IconKind, string, string, string?][] = [
   ['diamond', '#e0322a', 'Mission', 'H'], ['flag', '#ff5ad8', 'Race'], ['house', '#7dffb0', 'Home'], ['property', '#ffd24a', 'For sale', '$'], ['property', '#7dffb0', 'Owned', 'O'], ['bank', '#e6c84a', 'Bank'],
   ['shield', '#4a7cff', 'Police'], ['tower', '#c8c3b5', 'Tower'], ['ramp', '#b6ff3a', 'Stunts'], ['circle', '#5ac8c8', 'Shop', 'S'],
   ['coin', '#ffd24a', 'Fence', '$'], ['garage', '#8fb0d6', 'Garage', 'P'], ['taxi', '#d8b84a', 'Taxi'], ['metro', '#6a9fd8', 'Metro'],
-  ['wheel', '#b48cff', 'Bike rack'], ['wheelpay', '#b48cff', 'Bike rental'], ['police', '#e0322a', 'Patrol car'], ['truck', '#ff8a3a', 'Intercept'], ['getaway', '#ffd24a', 'Getaway'], ['eye', '#9fe8ff', 'Tailing'], ['bolt', '#ff7ab8', 'Prank'], ['rarecar', '#e6c84a', 'Rare car'], ['hanger', '#ff9a5a', 'Clothes'], ['scissors', '#9fd0ff', 'Barber'], ['cup', '#7de0a0', 'Snacks'], ['stand', '#ffb84a', 'Food stand'], ['cluster', '#c8c3b5', 'Group', '3'],
+  ['wheel', '#b48cff', 'Bike rack'], ['wheelpay', '#b48cff', 'Bike rental'], ['police', '#e0322a', 'Patrol car'], ['truck', '#ff8a3a', 'Intercept'], ['getaway', '#ffd24a', 'Getaway'], ['eye', '#9fe8ff', 'Tailing'], ['bolt', '#ff7ab8', 'Prank'], ['rarecar', '#e6c84a', 'Rare car'], ['hanger', '#ff9a5a', 'Clothes'], ['scissors', '#9fd0ff', 'Barber'], ['cup', '#7de0a0', 'Snacks'], ['stand', '#ffb84a', 'Food stand'], ['boat', '#6ad0e8', 'Marina'], ['bridge', '#ffb84a', 'Drawbridge'], ['cluster', '#c8c3b5', 'Group', '3'],
 ];
 
 /** one thing on the map after decluttering */
@@ -149,7 +149,8 @@ export class FullMap {
   // ------------------------------------------------------------------ geometry
   private get mapW() { return Math.max(200, innerWidth - this.side.offsetWidth); }
   private get mapH() { return innerHeight; }
-  private fit() { return Math.min(this.mapW, this.mapH) / (2 * (HALF + 40)); }
+  /** the whole city and the bay: the view sits a little south-east of centre */
+  private fit() { return Math.min(this.mapW, this.mapH) / (2 * (HALF + 74)); }
   private clampZoom(z: number) { return Math.max(this.fit() * 0.8, Math.min(8, z)); }
   private toWorld(sx: number, sy: number) { return { x: this.cx + (sx - this.mapW / 2) / this.zoom, z: this.cz + (sy - this.mapH / 2) / this.zoom }; }
   private sx(x: number) { return this.mapW / 2 + (x - this.cx) * this.zoom; }
@@ -166,8 +167,8 @@ export class FullMap {
     g.hud.show(null);
     this.el.style.display = 'block';
     this.zoom = this.fit();
-    this.cx = 0;
-    this.cz = 0;
+    this.cx = 45;
+    this.cz = 45;
     this.fly = null;
     g.input.unlock();
     this.places = g.places.list();

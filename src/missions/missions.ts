@@ -7,6 +7,7 @@ import { MISSIONS } from './data';
 import { device } from '../core/device';
 import { RACE_MISSIONS } from '../activities/races';
 import { TRUCK_MISSION } from '../activities/truck';
+import { WATER_MISSIONS } from '../activities/waterjobs';
 import { GETAWAY_MISSIONS } from '../activities/getaway';
 import { TAIL_MISSIONS } from '../activities/tail';
 import { PRANK_MISSIONS } from '../activities/pranks';
@@ -50,7 +51,7 @@ function makeBeam(scene: THREE.Scene, r: number, h: number): Beam {
 }
 
 export class Missions {
-  defs = [...MISSIONS, TRUCK_MISSION, ...GETAWAY_MISSIONS, ...TAIL_MISSIONS, ...PRANK_MISSIONS, ...RACE_MISSIONS];
+  defs = [...MISSIONS, ...WATER_MISSIONS, TRUCK_MISSION, ...GETAWAY_MISSIONS, ...TAIL_MISSIONS, ...PRANK_MISSIONS, ...RACE_MISSIONS];
   run: Run | null = null;
   /** mission waiting on the intro card */
   card: MissionDef | null = null;
@@ -330,6 +331,7 @@ export class Missions {
   private checkMarkers() {
     const g = this.g;
     const P = g.player.worldPos;
+    if (g.player.vehicle?.boat) return; // cards are for people on the quay, not boats going past it
     const radius = g.player.vehicle ? 5.5 : 2.8;
     for (const d of this.defs) {
       const dist = Math.hypot(d.marker.x - P.x, d.marker.z - P.z);

@@ -1,7 +1,7 @@
 // DOM HUD + screens. Pixel font, dark navy panels (art bible §6).
 import * as THREE from 'three';
 import { HACK_INFO, HackKind } from '../hacking/hack';
-import { BLOCKS, HALF, PITCH, ROAD_HALF, SHORE, blockBounds, BANK_BLOCK, DROP_BLOCK } from '../world/layout';
+import { BLOCKS, CHANNEL, HALF, LAGOON, PITCH, ROAD_HALF, SHORE, blockBounds, BANK_BLOCK, DROP_BLOCK } from '../world/layout';
 import { DISTRICTS, districtOfBlock } from '../map/districts';
 import { TYPE_INFO, MissionDef } from '../missions/types';
 import type { Missions } from '../missions/missions';
@@ -317,7 +317,7 @@ export class Hud {
   }
 
   get mapExtent() {
-    return HALF + 30;
+    return HALF + 130;
   }
 
   // ------------------------------------------------------------------ per frame
@@ -479,7 +479,7 @@ export class Hud {
   // ------------------------------------------------------------------ minimap
   private buildMapBase() {
     const S = 2; // px per metre
-    const E = HALF + 30;
+    const E = HALF + 130;
     const c = document.createElement('canvas');
     c.width = c.height = Math.ceil(E * 2 * S);
     const x = c.getContext('2d')!;
@@ -497,6 +497,12 @@ export class Hud {
         x.fillStyle = isBank ? '#4a5a3a' : isDrop ? '#5a4a2a' : DISTRICTS[districtOfBlock(bi, bj)].map;
         x.fillRect((b.x0 + E) * S, (b.z0 + E) * S, (b.x1 - b.x0) * S, (b.z1 - b.z0) * S);
       }
+    // the lagoon and the cut, then the piers
+    x.fillStyle = '#16303c';
+    x.fillRect((LAGOON.x0 + E) * S, (LAGOON.z0 + E) * S, (LAGOON.x1 - LAGOON.x0) * S, (LAGOON.z1 - LAGOON.z0) * S);
+    x.fillRect((CHANNEL.x0 + E) * S, (CHANNEL.z0 + E) * S, (CHANNEL.x1 - CHANNEL.x0) * S, (CHANNEL.z1 - CHANNEL.z0) * S);
+    x.fillStyle = '#6e5a44';
+    for (const [a, b, w, h] of [[SHORE, 52, 50, 8], [SHORE, 160, 65, 16], [143, SHORE, 8, 27], [-140, SHORE, 90, 6]]) x.fillRect((a + E) * S, (b + E) * S, w * S, h * S);
     this.mapBase = c;
     void PITCH;
   }

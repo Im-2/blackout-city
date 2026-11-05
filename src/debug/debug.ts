@@ -2,12 +2,12 @@
 import type { Game } from '../core/game';
 import { blockCenter } from '../world/layout';
 import { Vehicle } from '../vehicles/vehicle';
-import { DIMS, CarKind } from '../vehicles/carMesh';
+import { DIMS, CarKind , BOATS } from '../vehicles/carMesh';
 import { colorFor } from '../ai/traffic';
 import { Rng } from '../core/math';
 import { districtAt } from '../map/districts';
 
-const ALL_KINDS = Object.keys(DIMS) as CarKind[];
+const ALL_KINDS = (Object.keys(DIMS) as CarKind[]).filter((k) => !BOATS.includes(k));
 let cycleI = 0;
 let tpI = -1;
 const rng = new Rng(9);

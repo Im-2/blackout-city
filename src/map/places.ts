@@ -83,12 +83,13 @@ export class Places {
       }));
     }
     for (const s of g.activities.spots) {
-      const bike = s.type === 'bike' || s.type === 'repair';
+      const bike = s.type === 'bike' || s.type === 'repair' || s.type === 'marina';
       const shop = s.category === 'shop';
       out.push(base({
         id: s.id, name: s.name, desc: s.intro, category: s.category ?? (bike ? 'service' : 'activity'),
         icon: s.icon ?? (bike ? (s.tag === '$' ? 'wheelpay' : 'wheel') : 'ramp'), color: s.color ?? g.activities.iconColor(s), tag: s.tag,
-        prio: s.minor ? PRIO.minor : shop ? PRIO.shop : bike ? PRIO.minor : PRIO.activity, x: s.x, z: s.z, pin: !!s.pin,
+        ...(s.id === 'bridge' ? { status: g.water.bridge.open ? 'Raised: road closed' : 'Down: road open' } : {}),
+        prio: s.type === 'marina' ? PRIO.shop : s.minor ? PRIO.minor : shop ? PRIO.shop : bike ? PRIO.minor : PRIO.activity, x: s.x, z: s.z, pin: !!s.pin,
       }));
     }
     for (const r of RARES) {

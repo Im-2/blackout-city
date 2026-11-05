@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { Rng, clamp, damp, dampAngle, wrapAngle } from '../core/math';
 import { LANE, PITCH, lanePoint, groundHeight, HALF, RING } from '../world/layout';
+import { isWater, SEA_LIMIT } from '../world/layout';
 import { Vehicle } from '../vehicles/vehicle';
 import { createCharacter } from '../characters/loader';
 import { COP_SKIN, SWAT_SKIN } from '../characters/skins';
@@ -160,6 +161,7 @@ export class Police {
     const P = g.player.worldPos;
     this.seenNow = false;
     this.lastSeenT += dt;
+    const onWater = !!g.player.vehicle?.boat;
     // they can't come into the home: the search closes in on the front door
     const home = g.home.inside && this.heat > 0;
     if (home) { const D = g.home.doorOut; this.lastKnown.set(D.x, 0, D.z + D.dz * 2); this.lastSeenT = Math.max(this.lastSeenT, 2); }
@@ -180,6 +182,7 @@ export class Police {
       const d = Math.hypot(u.pos.x - P.x, u.pos.z - P.z);
       // despawn when calm and far, or too many
       const surplus = active.length > cap + 1 && ai.mode !== 'roadblock';
+      if (u.boat && !onWater && d > 60) { if (!g.isVisible(u.pos.x, 1, u.pos.z) || d > 200) { this.removeUnit(u); continue; } }
       if ((this.heat === 0 && ai.mode !== 'patrol' && d > 90) || (surplus && d > 120) || (u.wrecked && d > 70) || d > 230) {
         if (!g.isVisible(u.pos.x, 1, u.pos.z) || d > 200) { this.removeUnit(u); continue; }
       }
@@ -187,6 +190,12 @@ export class Police {
       if (this.heat > 0 && (ai.mode === 'patrol' || ai.mode === 'leave')) { ai.mode = 'pursuit'; ai.repathT = 0; }
       this.sight(u, dt, d);
       this.driveUnit(u, dt, d);
+    }
+
+    // out on the water at heat 3 the launches come
+    this.boatT -= dt;
+    if (onWater && this.heat >= 3 && this.boatT <= 0 && this.units.filter((u) => u.boat).length < (this.heat >= 5 ? 3 : 2)) {
+      this.boatT = this.spawnBoat() ? 7 : 1;
     }
 
     // officers
@@ -332,6 +341,7 @@ export class Police {
       const watchedEdges = this.heat > 0 ? g.routes.topEdges(3) : [];
       const tryEdges = [...watchedEdges.filter(() => this.rng.chance(0.5)), ...Array.from({ length: 40 }, () => this.rng.pick(g.chunks.nearEdges.length ? g.chunks.nearEdges : g.city.graph.edges))];
       for (const e of tryEdges) {
+        if (e.closed) continue;
         const flip = this.rng.chance(0.5);
         const a = flip ? e.b : e.a, b = flip ? e.a : e.b;
         const A = g.city.graph.nodes[a], B = g.city.graph.nodes[b];
@@ -403,6 +413,7 @@ export class Police {
     // prefer edges dead ahead; relax the cone if the player is stationary/cornered
     for (const minAhead of [0.5, -0.2]) {
       for (const e of g.city.graph.edges) {
+        if (e.closed) continue;
         const A = g.city.graph.nodes[e.a], B = g.city.graph.nodes[e.b];
         const mx = (A.x + B.x) / 2, mz = (A.z + B.z) / 2;
         const dx = mx - P.x, dz = mz - P.z;
@@ -432,12 +443,52 @@ export class Police {
     }
   }
 
+  private boatT = 0;
+
+  /** a launch out of sight, somewhere with open water round it */
+  private spawnBoat() {
+    const g = this.g, P = g.player.worldPos;
+    for (let i = 0; i < 30; i++) {
+      const a = this.rng.next() * Math.PI * 2, r = 80 + this.rng.next() * 70;
+      const x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
+      if (!isWater(x, z) || !isWater(x + 8, z) || !isWater(x - 8, z) || !isWater(x, z + 8) || !isWater(x, z - 8)) continue;
+      if (x > SEA_LIMIT || z > SEA_LIMIT || (g.isVisible(x, 1, z) && r < 120)) continue;
+      const v = new Vehicle('policeboat', '#23283a', g.col);
+      v.driver = 'cop';
+      v.ai = { mode: 'pursuit', pts: [], idx: 0, repathT: 0, stuckT: 0, reverseT: 0, sees: false, checkT: 0, deployed: false, officers: [], a: 0, b: 0, c: 0, phase: 'edge', wanderT: 0 } as CopAI;
+      v.place(x, z, Math.atan2(P.x - x, P.z - z));
+      v.siren = true;
+      g.addVehicle(v);
+      this.units.push(v);
+      g.hud.toast('POLICE LAUNCH', 'heat');
+      return true;
+    }
+    return false;
+  }
+
+  /** straight for you, cutting across your bow when it's close */
+  private driveBoat(u: Vehicle, ai: CopAI, dt: number, d: number) {
+    const g = this.g, P = g.player.worldPos, pv = g.player.vehicle;
+    u.siren = this.heat > 0;
+    if (ai.reverseT > 0) { ai.reverseT -= dt; u.throttle = -1; return; }
+    const lead = clamp(d / 30, 0, 1);
+    const tx = P.x + (pv?.vx ?? 0) * lead, tz = P.z + (pv?.vz ?? 0) * lead;
+    const { steer } = steerTo(u, tx, tz, 2.4);
+    u.steer = steer;
+    const onLand = !pv?.boat;
+    const want = onLand ? (d > 26 ? 12 : 0) : d < 8 ? (pv?.speedAbs ?? 0) + 4 : 34;
+    u.throttle = clamp((want - u.speed) * 0.5, -1, 1);
+    ai.stuckT = u.throttle > 0.4 && u.speedAbs < 1 ? ai.stuckT + dt : 0;
+    if (ai.stuckT > 1.4) { ai.stuckT = 0; ai.reverseT = 1.2; u.steer = -steer; }
+  }
+
   // ------------------------------------------------------------------ driving
   private driveUnit(u: Vehicle, dt: number, d: number) {
     const g = this.g;
     const ai = u.ai as CopAI;
     if (u.wrecked) { u.throttle = 0; u.handbrake = true; u.siren = false; return; }
     u.handbrake = false;
+    if (u.boat) { this.driveBoat(u, ai, dt, d); return; }
     if (ai.mode === 'stakeout' || ai.mode === 'roadblock') {
       u.throttle = 0;
       u.handbrake = true;
@@ -522,6 +573,9 @@ export class Police {
       u.throttle = clamp((want - u.speed) * 0.4, -1, 1);
       if (Math.abs(diff) > 2.0 && u.speedAbs < 6) ai.reverseT = 0.8;
     }
+    // the bridge is up: nobody goes further
+    const hold = g.water.bridge.holdDist(u);
+    if (hold !== null) { u.throttle = hold < 2 ? (u.speed > 1 ? -1 : 0) : clamp((Math.max(0, hold * 0.7) - u.speed) * 0.5, -1, 1); ai.repathT = Math.min(ai.repathT, 0.2); }
     // green wave: pursuers stop at the lights closing behind the player
     if (u.speedAbs > 0.5 || u.throttle > 0) {
       const n = g.city.graph.nearestNode(u.pos.x, u.pos.z);
@@ -588,6 +642,8 @@ export class Police {
       if (Math.abs(dx * fz - dz * fx) > 2) continue;
       want = Math.min(want, Math.max(0, (along - 6) * 0.9));
     }
+    const hold = g.water.bridge.holdDist(u);
+    if (hold !== null) want = Math.min(want, Math.max(0, hold * 0.7));
     u.throttle = clamp((want - u.speed) * 0.45, -1, 1);
     if (u.throttle > 0.4 && u.speedAbs < 0.8) ai.stuckT += dt; else ai.stuckT = 0;
     if (ai.stuckT > 3) { ai.pts = []; ai.stuckT = 0; }

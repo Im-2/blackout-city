@@ -1,13 +1,13 @@
 // Map icons: every kind of place has its own silhouette as well as its colour, so
 // they read at a glance. Shared by the full map, the location list and the minimap.
 
-export type IconKind = 'diamond' | 'flag' | 'house' | 'bank' | 'shield' | 'tower' | 'circle' | 'coin' | 'garage' | 'ramp' | 'taxi' | 'metro' | 'wheel' | 'wheelpay' | 'police' | 'cluster' | 'truck' | 'getaway' | 'eye' | 'bolt' | 'rarecar' | 'hanger' | 'scissors' | 'cup' | 'stand' | 'property';
+export type IconKind = 'diamond' | 'flag' | 'house' | 'bank' | 'shield' | 'tower' | 'circle' | 'coin' | 'garage' | 'ramp' | 'taxi' | 'metro' | 'wheel' | 'wheelpay' | 'police' | 'cluster' | 'truck' | 'getaway' | 'eye' | 'bolt' | 'rarecar' | 'hanger' | 'scissors' | 'cup' | 'stand' | 'property' | 'boat' | 'bridge';
 
 const INK = '#0a1218', EDGE = '#0f141c';
 
 /** half-size in pixels at scale 1: bigger means more important */
 export const ICON_R: Record<IconKind, number> = {
-  diamond: 14, flag: 13, house: 13, bank: 12, shield: 12, tower: 11, ramp: 11, circle: 9, coin: 9, garage: 8, taxi: 6, metro: 6, wheel: 6, wheelpay: 6, police: 5, cluster: 10, truck: 13, getaway: 13, eye: 13, bolt: 12, rarecar: 8, hanger: 10, scissors: 9, cup: 8, stand: 6, property: 10,
+  diamond: 14, flag: 13, house: 13, bank: 12, shield: 12, tower: 11, ramp: 11, circle: 9, coin: 9, garage: 8, taxi: 6, metro: 6, wheel: 6, wheelpay: 6, police: 5, cluster: 10, truck: 13, getaway: 13, eye: 13, bolt: 12, rarecar: 8, hanger: 10, scissors: 9, cup: 8, stand: 6, property: 10, boat: 10, bridge: 10,
 };
 
 function poly(c: CanvasRenderingContext2D, pts: number[][], x: number, y: number, r: number, offset = 0) {
@@ -33,6 +33,10 @@ const SHAPE: Partial<Record<IconKind, number[][]>> = {
   getaway: [[-1, 0.05], [-0.55, 0.05], [-0.3, -0.6], [0.45, -0.6], [0.7, 0.05], [1, 0.05], [1, 0.7], [-1, 0.7]],
   rarecar: [[-1, 0.05], [-0.55, 0.05], [-0.3, -0.6], [0.45, -0.6], [0.7, 0.05], [1, 0.05], [1, 0.7], [-1, 0.7]],
   property: [[0, -1], [1, -0.05], [0.72, -0.05], [0.72, 0.85], [-0.72, 0.85], [-0.72, -0.05], [-1, -0.05]],
+  // a hull and a sail
+  boat: [[-1, 0.35], [1, 0.35], [0.6, 0.95], [-0.6, 0.95], [-1, 0.35], [-0.08, 0.35], [-0.08, -1], [0.75, 0.15], [0.08, 0.15], [0.08, 0.35]],
+  // two leaves, raised
+  bridge: [[-1, 0.9], [-1, 0.3], [-0.2, -0.9], [0, -0.5], [0.2, -0.9], [1, 0.3], [1, 0.9]],
   // a coat hanger
   hanger: [[0, -1], [0.2, -0.65], [1, 0.3], [1, 0.75], [-1, 0.75], [-1, 0.3], [-0.2, -0.65]],
   // crossed blades

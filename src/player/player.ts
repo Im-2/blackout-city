@@ -2,7 +2,7 @@
 // enter/exit vehicles. Slightly weighty but responsive.
 import * as THREE from 'three';
 import { clamp, damp, dampAngle } from '../core/math';
-import { groundHeight, surfaceHeight, CURB_H } from '../world/layout';
+import { groundHeight, surfaceHeight, CURB_H, isWater } from '../world/layout';
 import { createCharacter } from '../characters/loader';
 import { PLAYER_SKIN } from '../characters/skins';
 import type { CharacterView, AnimState } from '../characters/rig';
@@ -57,7 +57,9 @@ export class Player {
 
   spawn(x: number, z: number, heading: number) {
     this.exitVehicle(true);
-    this.pos.set(x, Math.max(groundHeight(x, z), this.g.col.groundUnder(x, z, R, 1.5)), z);
+    // a pier or a bridge deck, if this is over the water
+    const gy = isWater(x, z) ? surfaceHeight(x, z, 1) : groundHeight(x, z);
+    this.pos.set(x, Math.max(gy, this.g.col.groundUnder(x, z, R, 1.5)), z);
     this.travel = null;
     this.hidden = false;
     this.view.root.visible = true;
@@ -373,6 +375,7 @@ export class Player {
     if (!v) return;
     if (!force && v.speedAbs > 6) return;
     const g = this.g;
+    if (v.boat && !force && !g.water.landingNear(v.pos.x, v.pos.z)) { g.hud.toast('NOWHERE TO STEP OFF: GET TO A PIER OR A QUAY', 'dim'); g.audio.deny(); return; }
     v.driver = 'none';
     v.throttle = 0;
     v.steer = 0;
@@ -384,7 +387,10 @@ export class Player {
     this.vehicle = null;
     // driver door is on the car's left (+x local)
     const lx = Math.cos(v.heading), lz = -Math.sin(v.heading);
-    for (const side of [1, -1]) {
+    if (v.boat) {
+      const l = g.water.nearestLanding(v.pos.x, v.pos.z);
+      this.pos.set(l.x, l.y, l.z);
+    } else for (const side of [1, -1]) {
       const x = v.pos.x + lx * 1.7 * side, z = v.pos.z + lz * 1.7 * side;
       const probe = { x, z };
       const res = g.col.resolveCircle(probe, R, 0.2, 0.45, 1.8);

@@ -39,6 +39,7 @@ export const playerVehicleDurability: Durability = {
     pickup: 450, police: 450, suv: 480,
     van: 550, ambulance: 600, foodtruck: 600,
     boxtruck: 750, garbage: 900, firetruck: 900, bus: 1000, swat: 1100,
+    jetski: 260, speedboat: 450, policeboat: 700,
   },
   safeImpact: 8, scale: 0.6, power: 1.5,
   lightObject: 0.15,

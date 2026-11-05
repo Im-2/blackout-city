@@ -71,6 +71,8 @@ src/
     interior.ts           Kit: modular rooms/props/colliders/surfaces, streamable
     buildings.ts          enterable buildings, ladders, ziplines, per-site alarms
     stores.ts             clothes stores, barber, corner shops, food stands
+    waterfront.ts         lagoon quay, piers, boardwalk, cranes, ship, seawall colliders
+    water.ts              waves, drawbridge, marinas, wakes, sinking
     properties.ts         houses to buy: PROPERTIES table, floor plans, furniture, garages, benefits
     home.ts               the player's home + garage: baked lighting, furniture, TV, displays, parking
   characters/
@@ -115,6 +117,7 @@ src/
     pranks.ts             billboard messages + filter, scored prank missions
     collection.ts         rare cars, sets, set rewards
     repair.ts             roadside repair pads
+    waterjobs.ts          smuggling run, jet ski race, dock heist
   reputation/reputation.ts rep per district + overall, tiers, shop + ped reactions
   save/records.ts         local best trick scores + race times (written at once)
   save/save.ts            localStorage save: cash, stash, outfits, upgrades, escapes, missions, rep, vehicles
@@ -243,7 +246,7 @@ Everything below is a `MissionDef` (or a place), so markers, map, minimap, LOCAT
 - **Test tip:** the screenshot tool's `scale` crops instead of scaling. Leave it out.
 
 ## Expansion pass 4 ("water, boats, metro, properties, clothing")
-Tag `stable-before-pass4` is the rollback point. Phases: 1 clothing (done), 2 properties (done), 3 waterfront, 4 visible metro. Each stops for testing. Deploy only when told.
+Tag `stable-before-pass4` is the rollback point. Phases: 1 clothing (done), 2 properties (done), 3 waterfront (done), 4 visible metro. Each stops for testing. Deploy only when told.
 - **Clothes (`player/clothes.ts`):** an item is a `Partial<Skin>`, in one of 7 slots. A `Look` is one item per slot; `buildSkin(look, hair)` draws it, and the rig caches by the key it builds. Add an item to `ITEMS` and it's on sale. Old saves' whole outfits (`LEGACY`) become items on load.
 - **Where:** THREADS + OLD CUTS block (1,6), MERIDIAN + QUICKSTOP block (7,4), VELVET + CORNER SHOP block (5,8), second-hand at Pawn & Loan. Each block: a two-unit row on the north side, a plain building behind (`world/stores.ts`). Check a new shop door isn't on a mission marker: Hot Parcel's at (-190, 9) drove the Old Town row one block west.
 - **Screen (`ui/shopui.ts`):** the camera moves to whichever direction has the most room and the player turns on the spot, so the preview is the real model. `Section`s of `Row`s, each with a look or hair to preview and a primary and alt action. Toasts don't show in `menu`; messages go in `.shop-msg`. Store walls are drawn unlit (`k.glow`) so shops stay bright at night.
@@ -257,6 +260,13 @@ Tag `stable-before-pass4` is the rollback point. Phases: 1 clothing (done), 2 pr
 - **Active home** (`save.activeHome`, set on the desk's PROPERTIES tab): where you wake, the pinned map icon, and whose `regen` and `hackOff` count. `stashCap` is the largest safe you own: one stash, reachable from any home. Over the cap nothing is lost, you just can't add.
 - **Garages:** `save.propCars[id]` is indexed by bay. Stored vehicles are real only while the garage kit is loaded; one you've driven off stays out there. Bikes use bike bays first, then car bays. The first flat keeps its one bay and `save.garage`. Purchases follow the bed rule.
 - **Taxis:** each property has a stand that works once you own it (`Stand.prop`). **Map:** `property` icon, gold $ for sale, green O owned, HOMES tab in LOCATIONS.
+- **Water (`layout.ts`):** `isWater(x, z)` is the sea past `SHORE`, `LAGOON` (dug out of park block (5,11), its pavement is the quay) and `CHANNEL` under the ring. `groundHeight` returns `WATER_Y` there, so anything without a deck falls in. Piers and the bridge are `surfaces` above it. Colliders below y = 0 stop boats; above it they stop people and cars, with gaps where a pier starts.
+- **Boats (`Vehicle.boat`, kinds jetski, speedboat, policeboat):** `updateBoat` has no wheels: slides, leans, lifts its nose, bobs. They have no wheel objects. Jet ski counts as `two` for the rider, but can't throw you and has no tricks. `SEA_LIMIT` pushes you back. Step off only near a landing (`landingNear`); forced off, you go to the nearest. Boats stream at 170 m, like parked cars. No mission cards from a boat.
+- **Falling in:** a non-boat below -0.7 over water, or a wrecked boat, sets `v.sunk`: it sinks, you're fished out to the nearest landing 1.3 s later (so a mission's wreck check still sees it), and your vehicle is gone. On foot: fade to the nearest landing.
+- **Drawbridge (`Drawbridge`, `g.water.bridge`):** on the ring between nodes (5,12) and (6,12). Hack toggles it (kind `bridge`, range 110); auto-lowers after 32 s. Up = `edge.closed`, stops across the road, deck surface removed, `gate` collider off. `gate` sits at y -0.5 to 1: a speedboat's top reaches it, a jet ski's doesn't, so only jet skis pass under it down. `holdDist(v)` makes traffic, police and rivals queue; police also repath at once; roadblocks and spawns skip closed edges. It waits up to 5 s for the deck to clear, then anyone still on it falls in.
+- **Police boats:** heat 3+ while you're on a boat: launches spawn out of sight in open water (2, 3 at heat 5), `driveBoat`. Road units keep trying the shore. They leave once you're ashore and they're out of sight.
+- **Map:** `mapExtent` is now `HALF + 130` and the full map opens centred on (45, 45) to fit the bay. New icons `boat`, `bridge`. New mission type `water`. Places: Harbour Marina on the lagoon's north quay, Docks Marina on the pier at z 52 to 60, cargo pier z 160 to 176, boardwalk x -140 to -50, Villa Marina's jetty x 143 to 151.
+- **Default:** the road grid stays whole, so the "harbour" is one dug-out park block, decks over open water, and the sea out to `SEA_LIMIT`. No warehouses were added on land; the docks already have them.
 - **Activities:** `ActivitySpot` gained `icon`, `color`, `category`, `minor`, so a new shop needs no map code. New icons: hanger, scissors, cup, stand.
 
 ## Testing notes

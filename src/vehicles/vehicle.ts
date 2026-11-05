@@ -1,9 +1,9 @@
 // Arcade car physics: bicycle-ish yaw model with lateral grip, handbrake
 // drift, collision vs AABBs (3 circles), damage, lights.
 import * as THREE from 'three';
-import { buildCar, CarKind, CarParts, LABELS, repaint } from './carMesh';
+import { BOATS, buildCar, CarKind, CarParts, LABELS, repaint } from './carMesh';
 import { clamp, damp, wrapAngle } from '../core/math';
-import { surfaceHeight } from '../world/layout';
+import { SEA_LIMIT, surfaceHeight, WATER_Y } from '../world/layout';
 import { aiVehicleDurability, crashDamage, impactDamage, landingDamage, playerVehicleDurability } from './damage';
 import type { Collision } from '../world/collision';
 
@@ -41,6 +41,10 @@ export const PARAMS: Record<CarKind, CarParams> = {
   ambulance: P(32, 13, 28, 8.5, 1.5, 2.0, 1.9),
   firetruck: P(27, 9, 24, 7.5, 1.4, 1.5, 3.4),
   swat: P(29, 12, 26, 8, 1.5, 1.9, 2.6),
+  // on water `grip` is how hard it holds a line: low, so they drift
+  jetski: P(30, 24, 9, 2.4, 0.9, 3.2, 0.32, 5),
+  speedboat: P(36, 17, 8, 1.7, 0.7, 2.1, 1.1, 5),
+  policeboat: P(34, 15, 9, 2, 0.8, 2.1, 1.6, 5),
 };
 
 export type Driver = 'none' | 'player' | 'traffic' | 'cop' | 'racer';
@@ -77,6 +81,10 @@ export class Vehicle {
   siren = false;
   isCop: boolean;
   isGetaway = false;
+  /** floats, and can't leave the water */
+  boat: boolean;
+  /** gone under: lost */
+  sunk = false;
   parked = false;
   /** per-frame derived */
   speed = 0; // signed forward speed
@@ -117,6 +125,7 @@ export class Vehicle {
   private climb = 0;
   private airT = 0;
   private airYaw = 0;
+  private waveT = 0;
   private flip = 0;
   /** set on touchdown, consumed by the trick system */
   landed: { time: number; yaw: number; flip: number; flipLeft: number } | null = null;
@@ -125,7 +134,8 @@ export class Vehicle {
     this.color = color;
     this.parts = buildCar(kind, color);
     this.p = { ...PARAMS[kind] };
-    this.isCop = kind === 'police' || kind === 'swat' || kind === 'policemoto';
+    this.isCop = kind === 'police' || kind === 'swat' || kind === 'policemoto' || kind === 'policeboat';
+    this.boat = BOATS.includes(kind);
     this.isEmergency = this.isCop || kind === 'ambulance' || kind === 'firetruck';
     this.two = this.parts.dims.two;
     const d = this.parts.dims;
@@ -155,6 +165,7 @@ export class Vehicle {
   repair() {
     this.health = 1;
     this.wrecked = false;
+    this.sunk = false;
     this.hitT = this.lastHit = 0;
   }
 
@@ -178,8 +189,9 @@ export class Vehicle {
   }
 
   place(x: number, z: number, heading: number) {
-    this.pos.set(x, surfaceHeight(x, z, 0.2), z);
+    this.pos.set(x, this.boat ? WATER_Y : surfaceHeight(x, z, 0.2), z);
     this.heading = heading;
+    this.sunk = false;
     this.vx = this.vz = this.yawRate = this.spin = 0;
     this.vy = this.climb = this.flip = 0;
     this.air = false;
@@ -232,6 +244,8 @@ export class Vehicle {
 
   update(dt: number, impacts: ImpactEvent[]) {
     if (this.hitT > 0) this.hitT -= dt;
+    if (this.sunk) { this.pos.y = Math.max(-7, this.pos.y - dt * 1.1); this.vx *= Math.exp(-dt * 2); this.vz *= Math.exp(-dt * 2); this.pos.x += this.vx * dt; this.pos.z += this.vz * dt; this.sync(); return; }
+    if (this.boat) { this.updateBoat(dt, impacts); return; }
     if (this.air) { this.updateAir(dt, impacts); return; }
     const p = this.p;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
@@ -321,6 +335,52 @@ export class Vehicle {
     if (this.alarmT > 0) this.alarmT -= dt;
     this.sync(braking || (thr < 0 && vf > 0.5) || hb);
     void thr; void steer;
+  }
+
+  /** no wheels, no road: it slides, leans into turns, lifts its nose and bobs */
+  private updateBoat(dt: number, impacts: ImpactEvent[]) {
+    const p = this.p;
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+    const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
+    let vf = this.vx * fx + this.vz * fz;
+    let vs = this.vx * rx + this.vz * rz;
+    const thr = this.wrecked ? 0 : this.throttle;
+    const steer = this.wrecked ? 0 : this.steer;
+    const boost = this.boost && thr > 0 && this.two;
+    const power = this.power;
+    const maxS = p.maxSpeed * (boost ? 1.15 : 1) * power;
+    let a = 0;
+    if (thr > 0) a = p.accel * power * (boost ? 1.4 : 1) * thr * (1 - Math.pow(clamp(vf / maxS, 0, 1), 2));
+    else if (thr < 0) a = vf > 0.5 ? p.brake * thr : vf > -p.reverse ? p.accel * 0.45 * thr : 0;
+    vf += a * dt;
+    vf -= vf * (thr === 0 ? 0.5 : 0.1) * dt; // water slows you without the engine
+    if (Math.abs(vf) < 0.03 && thr === 0) vf = 0;
+    vs *= Math.exp(-(this.handbrake ? p.driftGrip : p.grip) * dt);
+    const sp = Math.abs(vf);
+    const rate = p.steerRate * clamp(sp / 5, 0.2, 1) / (1 + sp / 70);
+    const target = -steer * rate * (vf < -0.5 ? -1 : 1) * (this.handbrake ? 1.5 : 1);
+    this.yawRate = damp(this.yawRate, target, 5, dt);
+    this.spin *= Math.exp(-2.4 * dt);
+    if (Math.abs(this.spin) < 0.01) this.spin = 0;
+    this.vx = fx * vf + rx * vs;
+    this.vz = fz * vf + rz * vs;
+    this.heading += (this.yawRate + this.spin) * dt;
+    this.pos.x += this.vx * dt;
+    this.pos.z += this.vz * dt;
+    // the coast guard's line: a current that pushes you back
+    if (this.pos.x > SEA_LIMIT) this.vx -= (this.pos.x - SEA_LIMIT) * 3 * dt;
+    if (this.pos.z > SEA_LIMIT) this.vz -= (this.pos.z - SEA_LIMIT) * 3 * dt;
+    this.waveT += dt;
+    const chop = 0.05 + Math.min(0.06, sp * 0.003);
+    this.pos.y = WATER_Y + Math.sin(this.waveT * 2.1 + this.id) * chop + Math.min(0.22, sp * 0.012);
+    this.speed = vf;
+    this.slip = Math.abs(vs);
+    this.skidding = false;
+    this.collideStatic(impacts);
+    this.roll = damp(this.roll, clamp(this.yawRate * sp * (this.two ? 0.05 : 0.03), -0.5, 0.5) + Math.sin(this.waveT * 1.4 + this.id) * 0.025, 5, dt);
+    this.pitch = damp(this.pitch, -clamp(sp * 0.012, 0, 0.26) + Math.sin(this.waveT * 1.7 + this.id * 2) * 0.02, 4, dt);
+    if (this.alarmT > 0) this.alarmT -= dt;
+    this.sync(false);
   }
 
   private collideStatic(impacts: ImpactEvent[]) {
@@ -434,6 +494,7 @@ export function collideVehicles(vs: Vehicle[], impacts: ImpactEvent[]) {
       const B = vs[j];
       const dx0 = A.pos.x - B.pos.x, dz0 = A.pos.z - B.pos.z;
       if (dx0 * dx0 + dz0 * dz0 > 49) continue;
+      if (Math.abs(A.pos.y - B.pos.y) > 1.4) continue; // a boat under a pier, a car on a deck
       A.circles(ca);
       B.circles(cb);
       const r = A.radius + B.radius;

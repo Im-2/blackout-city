@@ -2,6 +2,7 @@
 // signals, outer skyline. Builds merged per-block meshes + instanced props.
 import * as THREE from 'three';
 import { PAL } from '../core/palette';
+import { buildWaterfront } from './waterfront';
 import { Rng } from '../core/math';
 import { GeoBuilder } from './geo';
 import { Collision } from './collision';
@@ -10,7 +11,7 @@ import { worldMat } from '../render/patch';
 import type { FacadeStyle } from '../assets/textures';
 import {
   BLOCKS, PITCH, ROAD_HALF, SIDEWALK, CURB_H, HALF, PARK_LANE,
-  roadCoord, blockBounds, blockCenter, RoadGraph, RUNWAYS, BANK_BLOCK, DROP_BLOCK, RING, OVERPASS, SHORE, surfaces,
+  roadCoord, blockBounds, blockCenter, RoadGraph, RUNWAYS, BANK_BLOCK, DROP_BLOCK, RING, OVERPASS, SHORE, surfaces, BRIDGE, BRIDGE_H, LAGOON, CHANNEL,
 } from './layout';
 import { DISTRICTS, District, districtOfBlock } from '../map/districts';
 
@@ -20,8 +21,6 @@ export interface PowerBoxInfo { x: number; z: number; block: number; bi: number;
 export interface CameraSpot { x: number; z: number; y: number; yaw: number; }
 
 const FLOOR = 3.4;
-/** the ring highway's bridge over the harbour channel, on the south side */
-const BRIDGE = { x0: -40, x1: -16 };
 
 /** A streamable piece of the world: its meshes are hidden and freed when far away. */
 export interface Chunk { cx: number; cz: number; r: number; buckets: Map<string, GeoBuilder>; meshes: THREE.Mesh[]; on: boolean; }
@@ -117,7 +116,7 @@ export class City {
     return bj * BLOCKS + bi;
   }
 
-  private useAt(x: number, z: number) {
+  useAt(x: number, z: number) {
     return this.useBlock(this.blockIdAt(x, z));
   }
 
@@ -198,10 +197,13 @@ export class City {
   private buildGround() {
     const W = HALF + 70, E = SHORE; // land stops at the shore south and east
     const g = new GeoBuilder();
-    const cz = HALF - ROAD_HALF; // road edge above the bridge channel
-    g.floor(-W, -W, E, cz, 0, { tile: [8, 8] });
-    g.floor(-W, cz, BRIDGE.x0, E, 0, { tile: [8, 8] });
-    g.floor(BRIDGE.x1, cz, E, E, 0, { tile: [8, 8] });
+    // land, with a hole where the lagoon and its channel are
+    const L = LAGOON, C = CHANNEL;
+    g.floor(-W, -W, E, L.z0, 0, { tile: [8, 8] });
+    g.floor(-W, L.z0, L.x0, E, 0, { tile: [8, 8] });
+    g.floor(L.x1, L.z0, E, E, 0, { tile: [8, 8] });
+    g.floor(L.x0, L.z1, C.x0, E, 0, { tile: [8, 8] });
+    g.floor(C.x1, L.z1, L.x1, E, 0, { tile: [8, 8] });
     const asphalt = new THREE.Mesh(g.build(), this.mats.asphalt);
     asphalt.receiveShadow = true;
     this.group.add(asphalt);
@@ -217,7 +219,15 @@ export class City {
         const id = bj * BLOCKS + bi;
         const b = blockBounds(bi, bj);
         this.useBlock(id);
-        this.bucketOf(this.chunkOfBlock(id), 'side').floor(b.x0, b.z0, b.x1, b.z1, CURB_H, { tile: [4, 4], color: DISTRICTS[districtOfBlock(bi, bj)].tint });
+        const side = this.bucketOf(this.chunkOfBlock(id), 'side'), tint = DISTRICTS[districtOfBlock(bi, bj)].tint;
+        if (bi === 5 && bj === 11) { // the lagoon's quay is the pavement round it
+          const L = LAGOON, C = CHANNEL;
+          side.floor(b.x0, b.z0, b.x1, L.z0, CURB_H, { tile: [4, 4], color: tint });
+          side.floor(b.x0, L.z0, L.x0, b.z1, CURB_H, { tile: [4, 4], color: tint });
+          side.floor(L.x1, L.z0, b.x1, b.z1, CURB_H, { tile: [4, 4], color: tint });
+          side.floor(L.x0, L.z1, C.x0, b.z1, CURB_H, { tile: [4, 4], color: tint });
+          side.floor(C.x1, L.z1, L.x1, b.z1, CURB_H, { tile: [4, 4], color: tint });
+        } else side.floor(b.x0, b.z0, b.x1, b.z1, CURB_H, { tile: [4, 4], color: tint });
         this.props.box(b.x0, 0, b.z0, b.x1, CURB_H, b.z1, { color: PAL.curb, skip: { py: true, ny: true } });
         this.pedLoops.push({ x0: b.x0 + 1.8, z0: b.z0 + 1.8, x1: b.x1 - 1.8, z1: b.z1 - 1.8 });
       }
@@ -234,6 +244,7 @@ export class City {
     const Y = 0.015;
     for (const e of this.graph.edges) {
       const A = this.graph.nodes[e.a], B = this.graph.nodes[e.b];
+      if (e.axis === 'x' && A.z === HALF && A.x < BRIDGE.x0 && B.x > BRIDGE.x1) continue; // the drawbridge draws its own
       const m = this.useAt((A.x + B.x) / 2, (A.z + B.z) / 2);
       const s0 = ROAD_HALF + 3.5, len = e.len - 2 * s0;
       const ring = e.name === RING;
@@ -617,7 +628,6 @@ export class City {
   /** Ring highway dressing: seawall, the bridge over the channel and the overpass. */
   private buildHighway() {
     // seawall along the south + east shore (keeps everyone out of the water)
-    const H = 1.6;
     for (let t = -HALF - 70; t < SHORE; t += PITCH) {
       const t1 = Math.min(SHORE, t + PITCH);
       const gapS = t1 > BRIDGE.x0 && t < BRIDGE.x1;
@@ -630,12 +640,10 @@ export class City {
       }
       this.useAt(SHORE, (t + t1) / 2).box(SHORE - 0.5, -1.5, t, SHORE, 0.8, t1, { color: '#7a766d', shadeSides: true });
     }
-    this.col.add(-HALF - 70, 0, SHORE - 0.5, BRIDGE.x0, H, SHORE, false, 'seawall');
-    this.col.add(BRIDGE.x1, 0, SHORE - 0.5, SHORE, H, SHORE, false, 'seawall');
-    this.col.add(SHORE - 0.5, 0, -HALF - 70, SHORE, H, SHORE, false, 'seawall');
+    buildWaterfront(this);
     // bridge on the south side of the ring
     const zb = HALF;
-    this.elevated(BRIDGE.x0 - 9, BRIDGE.x1 + 9, 9, zb, 2.6, false);
+    this.elevated(BRIDGE.x0 - 9, BRIDGE.x1 + 9, 9, zb, BRIDGE_H, false, true);
     const pb = this.useAt((BRIDGE.x0 + BRIDGE.x1) / 2, HALF - 10);
     for (const x of [BRIDGE.x0 + 3, BRIDGE.x1 - 3])
       for (const sz of [-1, 1]) pb.cbox(x, 6, zb + sz * 7.6, 1, 15, 1, { color: '#6e6a62', shadeSides: true });
@@ -652,7 +660,7 @@ export class City {
    * A raised road section along x: ramp up, deck, ramp down, side rails.
    * clearUnder keeps the space below the deck open for the road beneath.
    */
-  private elevated(x0: number, x1: number, rampLen: number, z: number, h: number, clearUnder: boolean) {
+  private elevated(x0: number, x1: number, rampLen: number, z: number, h: number, clearUnder: boolean, gap = false) {
     const zn = z - ROAD_HALF, zs = z + ROAD_HALF;
     const road: [number, number, number] = [0.2, 0.19, 0.18];
     const side: [number, number, number] = [0.36, 0.35, 0.33];
@@ -676,15 +684,15 @@ export class City {
       }
     };
     seg(x0, a, 0, h);
-    seg(a, b, h, h);
+    if (!gap) seg(a, b, h, h);
     seg(b, x1, h, 0);
     surfaces.push({ x0, z0: zn, x1: a, z1: zs, h0: 0.02, h1: h, axis: 'x' });
-    surfaces.push({ x0: a, z0: zn, x1: b, z1: zs, h0: h });
+    if (!gap) surfaces.push({ x0: a, z0: zn, x1: b, z1: zs, h0: h });
     surfaces.push({ x0: b, z0: zn, x1, z1: zs, h0: h, h1: 0.02, axis: 'x' });
     const railY = clearUnder ? h - 0.6 : 0;
     for (const [z0, z1] of [[zn - 0.2, zn], [zs, zs + 0.2]]) {
       this.col.add(x0, 0, z0, a, h + 1.2, z1, false, 'rail');
-      this.col.add(a, railY, z0, b, h + 1.2, z1, false, 'rail');
+      if (!gap) this.col.add(a, railY, z0, b, h + 1.2, z1, false, 'rail');
       this.col.add(b, 0, z0, x1, h + 1.2, z1, false, 'rail');
     }
     if (clearUnder) {

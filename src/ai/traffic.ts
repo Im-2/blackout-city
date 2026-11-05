@@ -326,6 +326,9 @@ export class Traffic {
         else if ((light === 'red' || (light === 'yellow' && ds > 10)) && ds < 26) want = Math.min(want, Math.max(0, (ds - 1.5) * 0.7));
       }
     }
+    // the drawbridge is up: queue
+    const hold = g.water.bridge.holdDist(v);
+    if (hold !== null) want = Math.min(want, Math.max(0, hold * 0.7));
     // bus stops
     if (ai.route && ai.phase === 'edge') {
       if (ai.stopT > 0) { ai.stopT -= dt; want = 0; if (ai.stopT <= 0) ai.stopCD = 8; }

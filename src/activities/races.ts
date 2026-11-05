@@ -329,6 +329,9 @@ export class Races {
     let aim = r.pts[Math.min(r.idx + 1, r.pts.length - 1)];
     let want = Math.min(v.p.maxSpeed, r.limit[Math.min(r.idx, r.limit.length - 1)] * (0.92 + r.skill * 0.1));
 
+    const hold = g.water.bridge.holdDist(v);
+    if (hold !== null) want = Math.min(want, Math.max(0, hold * 0.7));
+
     // don't plough straight through whatever's in front
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     let shift = 0;

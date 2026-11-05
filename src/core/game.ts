@@ -56,6 +56,8 @@ import { DAMAGE } from '../vehicles/damage';
 import { Repair } from '../activities/repair';
 import { ShopUi } from '../ui/shopui';
 import type { Properties } from '../world/properties';
+import { Water } from '../world/water';
+import { DockHeist, WaterRace } from '../activities/waterjobs';
 import { Minigame } from '../ui/minigame';
 import { TruckJob } from '../activities/truck';
 import { GetawayJob } from '../activities/getaway';
@@ -138,6 +140,9 @@ export class Game {
   homeUi!: HomeUi;
   shopUi!: ShopUi;
   properties!: Properties;
+  water!: Water;
+  waterRace!: WaterRace;
+  dockHeist!: DockHeist;
   /** context action for E while driving (e.g. respray booth) */
   carAction: { label: string; action: () => void } | null = null;
   private fade: { t: number; to: THREE.Vector3; heading: number; label: string; done: boolean; mid?: () => void } | null = null;
@@ -237,6 +242,9 @@ export class Game {
     this.stunts = new Stunts(this).build();
     this.bikes = new Bikes(this).build();
     this.repair = new Repair(this).build();
+    this.water = new Water(this).build();
+    this.waterRace = new WaterRace(this);
+    this.dockHeist = new DockHeist(this);
     this.tricks = new Tricks(this);
     this.races = new Races(this);
     this.minigame = new Minigame(this);
@@ -417,6 +425,7 @@ export class Game {
     this.disguise.reset();
     this.home.onWorldReset();
     this.properties.onWorldReset();
+    this.water.reset();
     this.bikes.reset();
     this.tricks.reset();
     this.collection.reset();
@@ -666,6 +675,8 @@ export class Game {
     this.home.update(dt, realDt);
     this.repair.update();
     this.properties.update(dt, realDt);
+    this.water.update(dt, realDt);
+    this.waterRace.update(dt);
     this.updateFade(realDt);
     this.news.update(realDt);
     this.hack.update(realDt, dt);
@@ -745,7 +756,7 @@ export class Game {
       if (big) { this.fx.spawn('debris', p, 8, new THREE.Vector3(e.nx, 0, e.nz), 0.6); this.fx.spawn('glass', p, 6); }
       this.audio.crash(e.impact, p);
       const involvesPlayer = e.v === pv || e.other === pv;
-      if (involvesPlayer && pv && pv.two && e.impact > 8.5) this.player.thrownOff(pv.vx, pv.vz);
+      if (involvesPlayer && pv && pv.two && !pv.boat && e.impact > 8.5) this.player.thrownOff(pv.vx, pv.vz);
       if (involvesPlayer) {
         this.camRig.addShake(Math.min(0.7, e.impact / 22));
         if (big) { this.post.triggerFlash('#ffffff', 0.12); this.hitstop(0.04); }

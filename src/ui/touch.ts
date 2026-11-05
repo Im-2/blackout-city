@@ -240,7 +240,7 @@ export class TouchControls {
         { id: 'cam', label: 'CAM', a: 'carCamera', r: 2, c: 1, cls: 'q' },
         hack,
       ];
-      if (v.two) out.push({ id: 'trick', label: 'TRICK', a: 'trick', r: 1, c: 2, cls: 'lm' });
+      if (v.two && !v.boat) out.push({ id: 'trick', label: 'TRICK', a: 'trick', r: 1, c: 2, cls: 'lm' });
       if (v.two ? v.kind !== 'bicycle' : v.kind === 'sports' || v.kind === 'muscle') out.push({ id: 'boost', label: 'BOOST', a: 'boost', r: 0, c: 2, cls: 'am' });
       return out;
     }

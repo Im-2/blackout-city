@@ -11,7 +11,8 @@ export type CarKind =
   | 'bicycle' | 'scooter' | 'motorbike' | 'policemoto'
   | 'sedan' | 'hatchback' | 'taxi' | 'sports' | 'muscle' | 'pickup' | 'suv'
   | 'van' | 'boxtruck' | 'garbage' | 'foodtruck' | 'bus' | 'ambulance' | 'firetruck'
-  | 'police' | 'swat';
+  | 'police' | 'swat'
+  | 'jetski' | 'speedboat' | 'policeboat';
 
 export interface Dims { len: number; wid: number; h: number; wheelR: number; wheelBase: number; track: number; two: boolean; seatY: number; seatZ: number; }
 
@@ -36,6 +37,10 @@ export const DIMS: Record<CarKind, Dims> = {
   ambulance: { len: 5.6, wid: 2.2, h: 2.75, wheelR: 0.43, wheelBase: 3.4, track: 1.82, two: false, seatY: 0.5, seatZ: 1.7 },
   firetruck: { len: 8.6, wid: 2.45, h: 3.0, wheelR: 0.5, wheelBase: 4.8, track: 2.0, two: false, seatY: 0.6, seatZ: 3.2 },
   swat: { len: 5.4, wid: 2.2, h: 2.5, wheelR: 0.45, wheelBase: 3.3, track: 1.8, two: false, seatY: 0.5, seatZ: 1.5 },
+  // boats: y = 0 is the waterline
+  jetski: { len: 2.8, wid: 0.95, h: 0.8, wheelR: 0.1, wheelBase: 1.4, track: 0, two: true, seatY: 0.35, seatZ: -0.25 },
+  speedboat: { len: 6.4, wid: 2.2, h: 1.6, wheelR: 0.1, wheelBase: 3, track: 1, two: false, seatY: 0.35, seatZ: -0.5 },
+  policeboat: { len: 7.6, wid: 2.7, h: 2.4, wheelR: 0.1, wheelBase: 3.4, track: 1, two: false, seatY: 0.45, seatZ: -1 },
 };
 
 export const LABELS: Record<CarKind, string> = {
@@ -43,6 +48,7 @@ export const LABELS: Record<CarKind, string> = {
   police: 'Cruiser', hatchback: 'Hatchback', sports: 'Sports car', muscle: 'Muscle car', pickup: 'Pickup', suv: 'SUV',
   van: 'Delivery van', foodtruck: 'Food truck', boxtruck: 'Box truck', garbage: 'Garbage truck', bus: 'City bus',
   ambulance: 'Ambulance', firetruck: 'Fire truck', swat: 'SWAT van',
+  jetski: 'Jet ski', speedboat: 'Speedboat', policeboat: 'Police launch',
 };
 
 export interface CarParts {
@@ -212,6 +218,43 @@ function twoBody(g: GeoBuilder, gl: GeoBuilder, kind: CarKind, color: string, d:
   return d.h;
 }
 
+export const BOATS: CarKind[] = ['jetski', 'speedboat', 'policeboat'];
+
+/** a hull stepped in to a point at the bow; everything else sits on top */
+function boatBody(g: GeoBuilder, gl: GeoBuilder, kind: CarKind, color: string, d: Dims) {
+  const L = d.len / 2, W = d.wid / 2;
+  const hull = kind === 'policeboat' ? '#23283a' : color;
+  const stripe = kind === 'policeboat' ? '#dcdad2' : '#e8e4d8';
+  const top = kind === 'jetski' ? 0.42 : 0.6;
+  g.box(-W, -0.3, -L, W, top, L * 0.35, { color: hull, shadeSides: true });
+  for (let i = 0; i < 4; i++) {
+    const a = L * 0.35 + (i * L * 0.65) / 4, b = L * 0.35 + ((i + 1) * L * 0.65) / 4, w = W * (1 - (i + 0.6) * 0.21);
+    g.box(-w, -0.3 + i * 0.09, a, w, top + i * 0.03, b, { color: hull, shadeSides: true });
+  }
+  g.box(-W - 0.01, top - 0.16, -L, W + 0.01, top - 0.06, L * 0.35, { color: stripe });
+  gl.box(-0.1, top, L - 0.15, 0.1, top + 0.06, L - 0.02, { color: '#ffe2a0' });
+  if (kind === 'jetski') {
+    g.box(-0.22, top, -L + 0.3, 0.22, top + 0.26, 0.2, { color: '#1c1c1e' }); // seat
+    g.box(-0.3, top, 0.2, 0.3, top + 0.32, 0.8, { color: hull, shadeSides: true }); // cowl
+    g.box(-0.38, top + 0.42, 0.34, 0.38, top + 0.47, 0.42, { color: '#1c1c1e' }); // bars
+    g.box(-0.04, top + 0.3, 0.34, 0.04, top + 0.44, 0.42, { color: '#1c1c1e' });
+  } else if (kind === 'speedboat') {
+    g.box(-W + 0.14, top - 0.02, -L + 0.3, W - 0.14, top + 0.02, L * 0.22, { color: '#c8bfa8' }); // deck
+    g.box(-W + 0.25, top, -1.8, W - 0.25, top + 0.36, -1.2, { color: '#7a2f2a' }); // bench
+    g.box(-W + 0.45, top, -0.7, -0.15, top + 0.3, -0.1, { color: '#7a2f2a' }); // seats
+    g.box(0.15, top, -0.7, W - 0.45, top + 0.3, -0.1, { color: '#7a2f2a' });
+    g.box(-W + 0.1, top, 0.3, W - 0.1, top + 0.72, 0.38, { color: '#7fa6b8' }); // screen
+    g.box(-0.5, -0.1, -L - 0.5, 0.5, top + 0.3, -L, { color: '#1c1c1e' }); // engine
+  } else {
+    g.box(-W + 0.2, top, -1.8, W - 0.2, top + 1.2, 1.2, { color: '#dcdad2', shadeSides: true }); // cabin
+    g.box(-W + 0.18, top + 0.65, 0.6, W - 0.18, top + 1.1, 1.22, { color: '#2a3a4a' });
+    g.box(-W + 0.18, top + 0.65, -1.5, W - 0.18, top + 1.1, 0.4, { color: '#2a3a4a' });
+    g.box(-W + 0.1, top + 1.2, -1.9, W - 0.1, top + 1.3, 1.3, { color: '#23283a' });
+    g.box(-W - 0.01, top - 0.42, -1.8, W + 0.01, top - 0.2, 1, { color: '#2b5ce0' });
+    g.box(-0.5, -0.1, -L - 0.5, 0.5, top + 0.3, -L, { color: '#1c1c1e' });
+  }
+}
+
 function buildGeo(kind: CarKind, color: string) {
   const key = kind + color;
   const hit = geoCache.get(key);
@@ -219,7 +262,8 @@ function buildGeo(kind: CarKind, color: string) {
   const d = DIMS[kind];
   const g = new GeoBuilder();
   const gl = new GeoBuilder();
-  if (d.two) twoBody(g, gl, kind, color, d);
+  if (BOATS.includes(kind)) boatBody(g, gl, kind, color, d);
+  else if (d.two) twoBody(g, gl, kind, color, d);
   else if (['sedan', 'taxi', 'police', 'hatchback', 'sports', 'muscle', 'suv', 'pickup'].includes(kind)) carBody(g, gl, kind, color, d);
   else boxBody(g, gl, kind, color, d);
   const res = { body: g.build(), glow: gl.build() };
@@ -255,7 +299,8 @@ export function buildCar(kind: CarKind, color: string): CarParts {
     wheelMat = worldMat({ map: texNoise(), color: PAL.tyre });
   }
   const wheels: THREE.Object3D[] = [];
-  const spots: [number, number][] = d.two ? [[0, 1], [0, -1]] : [[1, 1], [-1, 1], [1, -1], [-1, -1]];
+  const boat = BOATS.includes(kind);
+  const spots: [number, number][] = boat ? [] : d.two ? [[0, 1], [0, -1]] : [[1, 1], [-1, 1], [1, -1], [-1, -1]];
   for (const [sx, sz] of spots) {
     const pivot = new THREE.Group();
     pivot.position.set(sx * (d.track / 2 + 0.02), d.wheelR, sz * d.wheelBase / 2);
@@ -279,6 +324,7 @@ export function buildCar(kind: CarKind, color: string): CarParts {
   };
   if (kind === 'police') bar(PAL.sirenRed, PAL.sirenBlue, d.h + 0.18, -0.3);
   if (kind === 'swat') bar(PAL.sirenRed, PAL.sirenBlue, d.h + 0.12, -0.5);
+  if (kind === 'policeboat') bar(PAL.sirenRed, PAL.sirenBlue, d.h + 0.1, -0.4);
   if (kind === 'ambulance') bar(PAL.sirenRed, '#f0f0f0', d.h + 0.1, d.len / 2 - 0.6, 0.7, 0.6);
   if (kind === 'firetruck') bar(PAL.sirenRed, '#ff8a2a', d.h - 0.4, d.len / 2 - 0.4, 0.7, 0.7);
   if (kind === 'policemoto') bar(PAL.sirenRed, PAL.sirenBlue, d.wheelR + 0.9, d.wheelBase / 2 - 0.1, 0.1, 0.12);

@@ -9,7 +9,7 @@ import { RigCharacter, AnimState } from '../characters/rig';
 import { makePedSkin, PedType } from '../characters/pedTypes';
 import { DISTRICTS, districtAt } from '../map/districts';
 import type { Skin } from '../characters/skins';
-import { BLOCKS, blockBounds, groundHeight, isRoad, CURB_H, HALF, PITCH, ROAD_HALF } from '../world/layout';
+import { BLOCKS, blockBounds, groundHeight, isRoad, isWater, CURB_H, HALF, PITCH, ROAD_HALF } from '../world/layout';
 import { GeoBuilder } from '../world/geo';
 import { basicMat, worldMat } from '../render/patch';
 import { texNoise } from '../assets/textures';
@@ -212,7 +212,7 @@ export class Pedestrians {
       }
     }
     // some generated spots land off the kerb
-    for (const k of Object.keys(S)) S[k] = S[k].filter((p) => !isRoad(p.x, p.z));
+    for (const k of Object.keys(S)) S[k] = S[k].filter((p) => !isRoad(p.x, p.z) && !isWater(p.x, p.z));
     this.spots = S;
   }
 
@@ -491,7 +491,7 @@ export class Pedestrians {
     for (const list of this.carGrid.values()) list.length = 0;
     this.moving.length = 0;
     for (const v of this.g.vehicles) {
-      if (v.speedAbs < 1.5) continue;
+      if (v.speedAbs < 1.5 || v.boat) continue;
       this.moving.push(v);
       const k = carCell(v.pos.x, v.pos.z);
       let list = this.carGrid.get(k);

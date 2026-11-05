@@ -14,7 +14,7 @@ interface P {
   spin: number;
 }
 
-export type FxKind = 'spark' | 'smoke' | 'debris' | 'hack' | 'glass' | 'dust' | 'fire' | 'money' | 'steam' | 'rain' | 'paint';
+export type FxKind = 'spark' | 'smoke' | 'debris' | 'hack' | 'glass' | 'dust' | 'fire' | 'money' | 'steam' | 'rain' | 'paint' | 'wake';
 
 export class Fx {
   mesh: THREE.InstancedMesh;
@@ -88,6 +88,12 @@ export class Fx {
           p.vx = R() * 0.3 + 0.4; p.vy = 1.2 + Math.random() * 0.8; p.vz = R() * 0.3 + 0.2;
           p.max = 1.6 + Math.random(); p.size = 0.3; p.grow = 1.1; p.g = 0.4; p.drag = 1.2;
           const g = 0.2 + Math.random() * 0.08; this.c.setRGB(g, g, g * 1.04); break;
+        }
+        case 'wake': {
+          const sp = 1.6 * power;
+          p.vx = R() * sp; p.vy = 0.5 + Math.random() * sp; p.vz = R() * sp;
+          p.max = 0.45 + Math.random() * 0.45; p.size = 0.16 + Math.random() * 0.12; p.grow = 0.6; p.g = -5; p.drag = 1.5;
+          this.c.set(Math.random() < 0.6 ? '#e8f4f8' : '#a8d0dc'); break;
         }
         case 'paint': {
           const sp = 3 * power;

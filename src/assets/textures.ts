@@ -280,3 +280,28 @@ export function texVaultDoor() {
   ctx.fillRect(15, 15, 2, 2);
   return toTexture(c, false);
 }
+
+/** the harbour: dark water with short pixel crests, tiling */
+export function texWaves() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const x = c.getContext('2d')!;
+  x.fillStyle = PAL.water;
+  x.fillRect(0, 0, 64, 64);
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 90; i++) {
+    x.fillStyle = PAL.waterDark;
+    x.fillRect(Math.floor(rnd() * 64), Math.floor(rnd() * 64), 2 + Math.floor(rnd() * 8), 1);
+  }
+  for (let i = 0; i < 42; i++) {
+    x.fillStyle = rnd() < 0.3 ? '#6f97a6' : '#3f6272';
+    x.fillRect(Math.floor(rnd() * 64), Math.floor(rnd() * 64), 2 + Math.floor(rnd() * 6), 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestMipmapNearestFilter;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}

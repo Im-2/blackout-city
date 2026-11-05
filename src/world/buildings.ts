@@ -69,6 +69,7 @@ const RESERVED: Record<string, [number, number]> = {
   stuntpark: [6, 10],
   longjump: [4, 10],
   shoreleap: [3, 11],
+  lagoon: [5, 11],
   ...STORE_BLOCKS,
   ...PROPERTY_BLOCKS,
 };

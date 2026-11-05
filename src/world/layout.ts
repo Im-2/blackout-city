@@ -6,6 +6,8 @@ export const ROAD_HALF = 7;
 export const SIDEWALK = 4;
 export const CURB_H = 0.15;
 export const HALF = (BLOCKS * PITCH) / 2; // 336
+/** waterline on the south and east sides of the map */
+export const SHORE = HALF + ROAD_HALF + 2;
 export const LANE = 2.2; // traffic lane centre offset from road centre
 export const PARK_LANE = 5.6;
 
@@ -45,7 +47,26 @@ export function isRoad(x: number, z: number) {
   return inX || inZ;
 }
 
+/** boats get turned back past this */
+export const SEA_LIMIT = HALF + 105;
+export const WATER_Y = -1.5;
+/** the marina basin, dug out of one park block */
+export const LAGOON = { x0: -45, z0: 291, x1: -11, z1: 325 };
+/** the cut from the lagoon out to the bay, under the ring road */
+export const CHANNEL = { x0: -40, z0: 325, x1: -16, z1: SHORE };
+/** the span of the drawbridge along the ring */
+export const BRIDGE = { x0: -40, x1: -16 };
+export const BRIDGE_H = 1.4;
+
+export function isWater(x: number, z: number) {
+  if (x > SHORE || z > SHORE) return true;
+  if (z < LAGOON.z0 || z > SHORE) return false;
+  if (x > LAGOON.x0 && x < LAGOON.x1 && z < LAGOON.z1) return true;
+  return x > CHANNEL.x0 && x < CHANNEL.x1 && z >= CHANNEL.z0;
+}
+
 export function groundHeight(x: number, z: number) {
+  if (isWater(x, z)) return WATER_Y;
   return isRoad(x, z) ? 0 : CURB_H;
 }
 
@@ -210,5 +231,3 @@ export function lanePoint(ax: number, az: number, bx: number, bz: number, t: num
 export const RUNWAYS = [[3, 10], [5, 10], [7, 10]];
 export const BANK_BLOCK: [number, number] = [4, 5];
 export const DROP_BLOCK: [number, number] = [8, 8];
-/** waterline on the south and east sides of the map */
-export const SHORE = HALF + ROAD_HALF + 2;
