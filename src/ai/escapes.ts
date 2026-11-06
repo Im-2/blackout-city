@@ -3,6 +3,7 @@
 // delivery drones), hackable bollard barriers, and a HUD list of what's
 // nearby. Police adapt to the player's favourite escapes.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PAL } from '../core/palette';
 import { Rng } from '../core/math';
 import { Kit } from '../world/interior';
@@ -112,13 +113,15 @@ export class Escapes {
       tex.magFilter = THREE.NearestFilter;
       tex.minFilter = THREE.NearestFilter;
       tex.colorSpace = THREE.SRGBColorSpace;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), basicMat({ map: tex }));
+      // a screen on each side of the backing, one draw call
+      const face = new THREE.PlaneGeometry(8, 3).translate(0, 0, 0.12);
+      const mesh = new THREE.Mesh(mergeGeometries([face, face.clone().rotateY(Math.PI)]), basicMat({ map: tex }));
       const ox = Math.sin(h) * 6, oz = Math.cos(h) * 6;
       mesh.position.set(x + ox, 8.5, z + oz);
       mesh.rotation.y = h + Math.PI;
       g.scene.add(mesh);
       const back = new GeoBuilder();
-      back.cbox(x + ox, 8.5, z + oz - Math.cos(h) * 0.1, Math.abs(Math.cos(h)) * 8.4 + 0.2, 3.4, Math.abs(Math.sin(h)) * 8.4 + 0.2, { color: '#2a2a2a' });
+      back.cbox(x + ox, 8.5, z + oz, Math.abs(Math.cos(h)) * 8.4 + 0.2, 3.4, Math.abs(Math.sin(h)) * 8.4 + 0.2, { color: '#2a2a2a' });
       back.cbox(x + ox, 3.5, z + oz, 0.4, 7, 0.4, { color: PAL.metal });
       g.scene.add(new THREE.Mesh(back.build(), worldMaterials().props));
       g.col.addCentered(x + ox, z + oz, 0.5, 0.5, 7, 0, false, 'pole');
